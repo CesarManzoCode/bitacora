@@ -5,9 +5,11 @@
 
 pub mod error;
 pub mod format;
+pub mod gc;
 pub mod index;
 pub mod medium;
 pub mod volume;
 
 pub use error::{Error, Result};
-pub use volume::{GcMode, Volume, VolumeConfig, VolumeState, VolumeStatus};
+pub use gc::GcStatus;
+pub use volume::{GcMode, SegmentUsage, Volume, VolumeConfig, VolumeState, VolumeStatus};

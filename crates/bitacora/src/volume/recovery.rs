@@ -17,6 +17,14 @@
 //!    `birth` of each LBA.
 //! 6. The caller opens a new hot segment on the first write.
 //!
+//! Cold stream (GC relocations): its batches keep the original `birth`, so
+//! no LSN chain is checked; an invalid batch ends the segment. A relocated
+//! birth may be found twice (original and copy, when the victim's
+//! `punch_hole` did not reach the disk): both copies hold the same bytes and
+//! the one with the greatest `seg_gen` is kept. A dead version that reappears
+//! is harmless because the GC frees a victim only after the writes that
+//! killed its records are synced, so the greatest `birth` still wins.
+//!
 //! Before returning, the block where the chain of the last segment of each
 //! stream ended is zeroed and the medium is synced. Otherwise, once a newer
 //! segment exists, the leftovers of a torn batch would be read back as a
@@ -294,7 +302,9 @@ fn rebuild(geo: &Geometry, segs: &[ScannedSegment]) -> Result<Recovered> {
     let mut max_gen = 0;
     for s in segs {
         let mut max_birth = 0;
+        let mut data_blocks = 0;
         for b in &s.batches {
+            data_blocks += b.summary.entries.len() as u64;
             for (j, e) in b.summary.entries.iter().enumerate() {
                 found.push(Found {
                     lba: e.lba,
@@ -317,6 +327,8 @@ fn rebuild(geo: &Geometry, segs: &[ScannedSegment]) -> Result<Recovered> {
             seg_gen: s.header.seg_gen,
             sealed: true,
             max_birth,
+            data_blocks,
+            damaged: false,
         });
     }
 
