@@ -5,11 +5,17 @@
 pub mod c01;
 pub mod c02;
 pub mod c03;
+pub mod c04;
+pub mod c05;
+pub mod c06;
 pub mod c07;
 pub mod c08;
+pub mod c09;
+pub mod c10;
 
+use std::error::Error;
 use std::fmt::Display;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
 
@@ -17,6 +23,7 @@ use bitacora::Volume;
 use bitacora::format::BLOCK_SIZE;
 
 use crate::model::Model;
+use crate::rng::block_data;
 
 /// Exit code of an omitted criterion.
 pub const SKIP_EXIT: u8 = 77;
@@ -60,6 +67,21 @@ pub const RUNNERS: &[Runner] = &[
         run: c03::run,
     },
     Runner {
+        id: "c04",
+        default_seed: 1,
+        run: c04::run,
+    },
+    Runner {
+        id: "c05",
+        default_seed: 1,
+        run: c05::run,
+    },
+    Runner {
+        id: "c06",
+        default_seed: 1,
+        run: c06::run,
+    },
+    Runner {
         id: "c07",
         default_seed: 1,
         run: c07::run,
@@ -68,6 +90,16 @@ pub const RUNNERS: &[Runner] = &[
         id: "c08",
         default_seed: 1,
         run: c08::run,
+    },
+    Runner {
+        id: "c09",
+        default_seed: 1,
+        run: c09::run,
+    },
+    Runner {
+        id: "c10",
+        default_seed: 1,
+        run: c10::run,
     },
 ];
 
@@ -161,4 +193,45 @@ pub fn scan(vol: &Volume, model: &Model) -> Scan {
         lba += n;
     }
     scan
+}
+
+/// Whether `data` is version `min..=max` of `lba` under `seed`; with
+/// `min == 0`, zeros also match.
+pub fn holds_version(seed: u64, lba: u64, data: &[u8], min: u64, max: u64) -> bool {
+    if data.len() != BLOCK_SIZE {
+        return false;
+    }
+    if min == 0 && data.iter().all(|&b| b == 0) {
+        return true;
+    }
+    (min.max(1)..=max).any(|v| data == block_data(seed, lba, v))
+}
+
+/// Root of the repository, where `thresholds.json` and `results/` live.
+pub fn repo_root() -> PathBuf {
+    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
+}
+
+/// The `value` of the entry reached through `keys` in `thresholds.json`.
+/// A minimal scan instead of a JSON parser: the file is frozen (contract
+/// section 14) and every threshold is `"key": {"value": <number>, ...}`.
+pub fn threshold(keys: &[&str]) -> Result<f64, Box<dyn Error>> {
+    let text = fs::read_to_string(repo_root().join("thresholds.json"))?;
+    let mut pos = 0;
+    for key in keys.iter().copied().chain(std::iter::once("value")) {
+        let pattern = format!("\"{key}\"");
+        let at = text[pos..]
+            .find(&pattern)
+            .ok_or_else(|| format!("thresholds.json has no {key}"))?;
+        pos += at + pattern.len();
+    }
+    let rest = text[pos..]
+        .trim_start()
+        .strip_prefix(':')
+        .ok_or("thresholds.json: expected ':' after \"value\"")?
+        .trim_start();
+    let end = rest
+        .find(|c: char| !(c.is_ascii_digit() || matches!(c, '.' | '-' | '+' | 'e' | 'E')))
+        .unwrap_or(rest.len());
+    Ok(rest[..end].parse()?)
 }
