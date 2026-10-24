@@ -4,6 +4,7 @@
 //! in their own sprints.
 
 pub mod backup;
+pub mod capacity;
 pub mod client;
 pub mod error;
 pub mod format;
@@ -22,6 +23,7 @@ pub mod volume;
 pub mod wire;
 
 pub use backup::BackupHeader;
+pub use capacity::{History, Projection};
 pub use client::{Client, ClientError};
 pub use error::{Error, Result};
 pub use gc::GcStatus;

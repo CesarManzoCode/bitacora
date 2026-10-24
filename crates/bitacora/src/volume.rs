@@ -98,7 +98,7 @@ impl VolumeConfig {
         max_segments(self.volume_size, self.segment_size)
     }
 
-    fn validate(&self) -> Result<()> {
+    pub(crate) fn validate(&self) -> Result<()> {
         if self.volume_size == 0 || !self.volume_size.is_multiple_of(BLOCK_SIZE_U64) {
             return Err(Error::InvalidArgument(format!(
                 "volume size {} is not a positive multiple of {BLOCK_SIZE}",

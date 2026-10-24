@@ -174,7 +174,7 @@ pub fn measure(
 }
 
 /// Nearest-rank percentile; 0 for an empty sample.
-fn percentile(sample: &mut [f64], q: f64) -> f64 {
+pub(crate) fn percentile(sample: &mut [f64], q: f64) -> f64 {
     if sample.is_empty() {
         return 0.0;
     }
@@ -183,7 +183,7 @@ fn percentile(sample: &mut [f64], q: f64) -> f64 {
     sample[rank.clamp(1, sample.len()) - 1]
 }
 
-fn json_str(s: &str) -> String {
+pub(crate) fn json_str(s: &str) -> String {
     let mut out = String::from("\"");
     for c in s.chars() {
         match c {
@@ -197,7 +197,7 @@ fn json_str(s: &str) -> String {
     out
 }
 
-fn json_num(x: f64) -> String {
+pub(crate) fn json_num(x: f64) -> String {
     if x.is_finite() {
         format!("{x:.4}")
     } else {
@@ -205,7 +205,7 @@ fn json_num(x: f64) -> String {
     }
 }
 
-fn cpu_model() -> String {
+pub(crate) fn cpu_model() -> String {
     fs::read_to_string("/proc/cpuinfo")
         .ok()
         .and_then(|info| {
@@ -217,14 +217,14 @@ fn cpu_model() -> String {
         .unwrap_or_else(|| "desconocido".to_string())
 }
 
-fn kernel() -> String {
+pub(crate) fn kernel() -> String {
     fs::read_to_string("/proc/sys/kernel/osrelease")
         .map(|s| s.trim().to_string())
         .unwrap_or_else(|_| "desconocido".to_string())
 }
 
 /// Models of every block device that reports one, sorted and joined.
-fn disk_models() -> String {
+pub(crate) fn disk_models() -> String {
     let mut models: Vec<String> = fs::read_dir("/sys/block")
         .into_iter()
         .flatten()
@@ -243,7 +243,7 @@ fn disk_models() -> String {
 }
 
 /// `HEAD`, with `-dirty` if tracked files differ from it.
-fn commit() -> String {
+pub(crate) fn commit() -> String {
     Command::new("git")
         .arg("-C")
         .arg(repo_root())
@@ -256,7 +256,7 @@ fn commit() -> String {
 }
 
 /// Current UTC time as `YYYY-MM-DDTHH:MM:SSZ`.
-fn utc_now() -> String {
+pub(crate) fn utc_now() -> String {
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())

@@ -20,6 +20,8 @@ pub mod c15;
 pub mod c16;
 pub mod c17;
 pub mod c18;
+pub mod c21;
+pub mod c22;
 pub mod c25;
 pub mod cluster;
 pub mod ublk;
@@ -163,6 +165,16 @@ pub const RUNNERS: &[Runner] = &[
         id: "c20",
         default_seed: 1,
         run: ublk::c20,
+    },
+    Runner {
+        id: "c21",
+        default_seed: 1,
+        run: c21::run,
+    },
+    Runner {
+        id: "c22",
+        default_seed: 1,
+        run: c22::run,
     },
     Runner {
         id: "c25",

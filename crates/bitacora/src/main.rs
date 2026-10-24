@@ -7,6 +7,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use bitacora::backup;
+use bitacora::capacity::{self, History};
 use bitacora::medium::FileMedium;
 use bitacora::{Client, GcMode, Replica, ReplicaConfig, Server, Version, Volume, VolumeConfig};
 use bitacora::{migrate, replica, server};
@@ -26,7 +27,8 @@ commands:
              [--segment-size SIZE]
   elect      --replicas S1,S2,S3
   migrate    --from S --to D
-  capacity   project physical capacity from a write history
+  capacity   --history H.json [--days N]
+             project the physical size of a volume after N days (30)
   ublk       --volume F [--create SIZE] | --recover DEV_ID --volume F
              expose a volume as a ublk block device (feature `ublk`)";
 
@@ -72,6 +74,7 @@ fn run(args: &[String]) -> Result<(), CliError> {
         "replica" => replica_cmd(rest),
         "elect" => elect(rest),
         "migrate" => migrate_cmd(rest),
+        "capacity" => capacity_cmd(rest),
         "ublk" => ublk_cmd(rest),
         "help" | "--help" | "-h" => {
             println!("{USAGE}");
@@ -451,6 +454,28 @@ fn migrate_cmd(args: &[String]) -> Result<(), CliError> {
         .map_err(|e| CliError::Failed(format!("destination socket: {e}")))?;
     let summary = migrate::request(&from, &to)?;
     println!("{}", summary.to_text());
+    Ok(())
+}
+
+/// `capacity --history H.json [--days N]`: prints
+/// `{"projected_physical_bytes": n}` for N days (30 by default) of the
+/// history (contract section 11).
+fn capacity_cmd(args: &[String]) -> Result<(), CliError> {
+    let opts = Options::parse(args, &["history", "days"])?;
+    if !opts.positional.is_empty() {
+        return Err(CliError::Usage("capacity: unexpected arguments".into()));
+    }
+    let path = opts.require("history")?;
+    let days = match opts.get("days") {
+        Some(text) => text
+            .parse()
+            .map_err(|_| CliError::Usage(format!("invalid number of days: {text}")))?,
+        None => 30,
+    };
+    let text =
+        std::fs::read_to_string(path).map_err(|e| CliError::Failed(format!("{path}: {e}")))?;
+    let history = History::from_json(&text)?;
+    println!("{}", capacity::project(&history, days)?.to_json()?);
     Ok(())
 }
 
