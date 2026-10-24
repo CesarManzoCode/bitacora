@@ -20,9 +20,16 @@ Fuente única de lo que bitacora no demuestra. Ningún otro archivo los repite.
 - Los snapshots son locales a cada proceso: no se replican ni se migran.
 - En `GcMode::Auto` el GC no deja colchón de segmentos libres: corre solo con 2 o menos (ADR 0001). La cubeta de 256 MiB/s nunca lo frena, y una escritura que necesita un segmento espera a que termine un ciclo del GC si este no acabó antes.
 - El volumen corre sobre un archivo en btrfs en la máquina de medición; el copy-on-write del sistema de archivos de abajo añade su propia amplificación, que no se descuenta.
+- Un segmento con un bloque vivo que no pasa su `data_crc` se marca dañado y el GC no lo reclama: su espacio no vuelve al volumen.
+- Los contadores del GC de `status()` no se guardan en disco y vuelven a cero al reabrir el volumen.
 
 ## Verificación
 
 - C19 y C20 (ublk) se omiten con código 77 cuando falta root, el módulo `ublk_drv` o el permiso; una omisión no es un aprobado.
 - Los umbrales de C4, C6, C12, C15, C22 y C25 se fijaron en K0 con la cota del diseño y la medición de la plataforma, antes de existir el motor, no con una corrida previa del motor.
 - C24 comprueba solo que el documento de requisitos y sus encabezados existen; si su contenido es correcto es un juicio humano.
+- En C6 la amplificación de escritura varía de una corrida a otra con la misma semilla, porque el hilo del GC no es determinista. Dos corridas dieron 2.4538 y 2.4599 en `caliente_fria`, frente al umbral de 2.5. La dispersión no se midió, así que el margen de aprobación no está acotado.
+- El `p99_ms` de C6 se mide sobre un archivo sin `O_DIRECT`, a través de la caché de páginas. No es la latencia del disco.
+- El campo `maquina.disco` de `results/c06.json` lista dos dispositivos y no dice en cuál estaba el archivo medido.
+- C7, C8 y C10 corren con el GC apagado. No prueban la detección de corrupción, los truncados ni los errores de E/S mientras se reubica un segmento. C9 y C5 sí corren con el GC activo.
+- La salida de C9 es idéntica byte a byte entre corridas solo mientras ninguna semilla falla. El hilo del GC no es determinista, así que una semilla que falla puede no repetir la misma salida.

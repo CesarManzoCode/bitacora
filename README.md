@@ -9,7 +9,7 @@ Es la versión ejecutable y abierta de la tarea de entrevista «Design a Storage
 | Fase | Contenido | Criterios | Estado |
 | --- | --- | --- | --- |
 | K0 | Fundación: contrato, investigación, plan | — | lista |
-| K1 | Volumen durable: log, índice, recuperación, checksums, GC, disco simulado | C1–C10 | pendiente |
+| K1 | Volumen durable: log, índice, recuperación, checksums, GC, disco simulado | C1–C10 | Cerrada |
 | K2 | Snapshots, backups, servidor, migración en vivo, réplica, estado | C11–C18, C25 | pendiente |
 | K3 | ublk, rendimiento, capacidad, documento de requisitos, clon limpio | C19–C24, C26 | pendiente |
 
@@ -29,7 +29,20 @@ Requisitos: Rust 1.98.1 (lo fija `rust-toolchain.toml`). Para la feature `ublk` 
 
 ## Resultados
 
-Todavía no hay resultados: el motor se escribe a partir de K1. Toda cifra que aparezca aquí saldrá de un archivo de `results/` con la máquina y el comando que la produjeron.
+Toda cifra de esta sección sale de un archivo de `results/` con la máquina y el comando que la produjeron.
+
+En el commit `5e91d04` pasan los criterios C1–C10 (corredores `bitacora-verify c01` a `c10`). Ninguno se omitió.
+
+### C6: amplificación de escritura del GC
+
+Fuente: [`results/c06.json`](results/c06.json). Máquina: AMD Ryzen 5 5600G, kernel 7.2.11-arch1-1. Comando: `target/release/bitacora-verify c06`. Fecha: 2026-10-24T19:49:22Z. Commit: `5e91d04`. Volumen de 1 GiB lleno, luego 3 × volumen de escrituras aleatorias de 4 KiB con `flush` cada 256.
+
+| Carga | Amplificación de escritura | Umbral | p99 por operación (ms) |
+| --- | --- | --- | --- |
+| `caliente_fria` (20 % de los bloques recibe 80 %) | 2.4599 | 2.5 | 0.0779 |
+| `uniforme` | 2.9134 | 3.5 | 0.0745 |
+
+Con el disparo de GC anterior al ADR 0001, la misma medición dio 3.9964 y 4.8663 y C6 fallaba ([`results/c06-aa68e3d.json`](results/c06-aa68e3d.json)).
 
 ## Licencia
 
