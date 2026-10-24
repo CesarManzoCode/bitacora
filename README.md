@@ -10,7 +10,7 @@ Es la versión ejecutable y abierta de la tarea de entrevista «Design a Storage
 | --- | --- | --- | --- |
 | K0 | Fundación: contrato, investigación, plan | — | lista |
 | K1 | Volumen durable: log, índice, recuperación, checksums, GC, disco simulado | C1–C10 | Cerrada |
-| K2 | Snapshots, backups, servidor, migración en vivo, réplica, estado | C11–C18, C25 | pendiente |
+| K2 | Snapshots, backups, servidor, migración en vivo, réplica, estado | C11–C18, C25 | Cerrada |
 | K3 | ublk, rendimiento, capacidad, documento de requisitos, clon limpio | C19–C24, C26 | pendiente |
 
 ## Comandos
@@ -32,6 +32,8 @@ Requisitos: Rust 1.98.1 (lo fija `rust-toolchain.toml`). Para la feature `ublk` 
 Toda cifra de esta sección sale de un archivo de `results/` con la máquina y el comando que la produjeron.
 
 En el commit `5e91d04` pasan los criterios C1–C10 (corredores `bitacora-verify c01` a `c10`). Ninguno se omitió.
+
+En el commit `457fd5c` pasan los criterios C11–C18 y C25 (corredores `bitacora-verify c11` a `c18` y `c25`), y C1–C10 siguen pasando. Ninguno se omitió. C12, C13, C15 y C25 comparan una cifra medida con un límite: los umbrales de `thresholds.json` en C12, C15 y C25, y 1.1 × 4 KiB por bloque cambiado en C13. Esas cifras todavía no tienen archivo en `results/` con máquina y comando, así que no se publican aquí.
 
 ### C6: amplificación de escritura del GC
 

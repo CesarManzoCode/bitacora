@@ -2,18 +2,18 @@
   "criterio": "c06",
   "cargas": {
     "caliente_fria": {
-      "amplificacion_escritura": 2.4599,
-      "p99_ms": 0.0779,
+      "amplificacion_escritura": 2.4544,
+      "p99_ms": 0.0492,
       "umbral": 2.5000,
       "bytes_cliente": 3221225472,
-      "bytes_medio": 7923863552
+      "bytes_medio": 7906197504
     },
     "uniforme": {
-      "amplificacion_escritura": 2.9134,
-      "p99_ms": 0.0745,
+      "amplificacion_escritura": 2.9185,
+      "p99_ms": 0.0735,
       "umbral": 3.5000,
       "bytes_cliente": 3221225472,
-      "bytes_medio": 9384857600
+      "bytes_medio": 9401180160
     }
   },
   "maquina": {
@@ -22,6 +22,6 @@
     "disco": "ADATA SU630, DataTraveler 2.0"
   },
   "comando": "/home/cesarmanzocode/kiln/projects/bitacora/repo/target/release/bitacora-verify c06",
-  "fecha": "2026-10-24T19:49:22Z",
-  "commit": "5e91d0464386aebbea1e56d4f3643b718bf9d423"
+  "fecha": "2026-10-24T22:15:52Z",
+  "commit": "457fd5c8dcdc63af5aecf5eb4117ac2479de3fc7-dirty"
 }

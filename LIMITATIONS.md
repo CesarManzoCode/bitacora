@@ -44,6 +44,7 @@ Fuente única de lo que bitacora no demuestra. Ningún otro archivo los repite.
 - Si el destino falla después de que el origen subió la época y antes de confirmar el commit, el origen vuelve a servir con la época nueva y la migración hay que repetirla con un destino nuevo; no hay reanudación.
 - Mientras la migración está congelada, las peticiones nuevas del origen esperan sin plazo. Si el servidor de origen se apaga en ese momento, esas conexiones no terminan hasta que la migración acaba.
 - Desde la ronda 5, cada escritura reconocida por el origen tarda al menos 1 ms más; el retraso se quita al congelar.
+- Mientras dura una migración, el origen guarda la versión fijada además de las escrituras nuevas. La migración no reserva espacio para eso y no frena al escritor, salvo el retraso de 1 ms desde la ronda 5. Un escritor sin pausa puede agotar los segmentos del origen antes de que termine la copia, y desde ahí sus escrituras reciben `NO_SPACE`. Se observó con un volumen de 16 MiB.
 
 ## Verificación
 
@@ -54,4 +55,6 @@ Fuente única de lo que bitacora no demuestra. Ningún otro archivo los repite.
 - El `p99_ms` de C6 se mide sobre un archivo sin `O_DIRECT`, a través de la caché de páginas. No es la latencia del disco.
 - El campo `maquina.disco` de `results/c06.json` lista dos dispositivos y no dice en cuál estaba el archivo medido.
 - C7, C8 y C10 corren con el GC apagado. No prueban la detección de corrupción, los truncados ni los errores de E/S mientras se reubica un segmento. C9 y C5 sí corren con el GC activo.
+- C14 y C15 miden la migración con un solo escritor por `Client` sobre volúmenes de 64 MiB, y la pausa de C15 es la mayor separación entre respuestas consecutivas de ese escritor. No se midió con varios clientes ni con volúmenes más grandes.
+- C16, C17, C18 y C25 usan tres procesos réplica con volúmenes de 64 MiB. No se midió cuánto tarda una resincronización, delta o completa, con volúmenes más grandes. Las pruebas de `crates/bitacora/tests/replication.rs` corren las tres réplicas en hilos de un solo proceso.
 - La salida de C9 es idéntica byte a byte entre corridas solo mientras ninguna semilla falla. El hilo del GC no es determinista, así que una semilla que falla puede no repetir la misma salida.
