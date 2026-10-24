@@ -7,6 +7,7 @@ pub mod backup;
 pub mod client;
 pub mod error;
 pub mod format;
+pub mod frontend;
 pub mod gc;
 pub mod index;
 pub mod medium;
@@ -15,6 +16,8 @@ pub mod replica;
 pub mod server;
 pub mod snapshot;
 pub mod status;
+#[cfg(feature = "ublk")]
+pub mod ublk;
 pub mod volume;
 pub mod wire;
 

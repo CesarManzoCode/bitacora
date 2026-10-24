@@ -2,6 +2,12 @@
 
 ## [Sin publicar]
 
+### K3 — Frontend, rendimiento y operación (en curso)
+
+- Traducción de peticiones de bloque en `frontend.rs`, sin dependencia de libublk: sectores de 512 bytes a bloques de 4096, `FLUSH` a `flush`, `FUA` a `write_fua`. Rechaza peticiones no alineadas a 4096, fuera del volumen, `DISCARD` y `WRITE_ZEROES`.
+- `bitacora ublk --volume F [--create SIZE]` (feature `ublk`, `make ublk`): dispositivo con bloque lógico de 4096, caché volátil y FUA, una cola de profundidad 64 y `UBLK_F_USER_RECOVERY | UBLK_F_USER_RECOVERY_REISSUE`. Imprime el id, sirve hasta `SIGTERM` y entonces cierra el volumen y borra el dispositivo. `bitacora ublk --recover DEV_ID --volume F` retoma el dispositivo tras un `SIGKILL`. Sin la feature, el subcomando avisa que el binario se compiló sin ella.
+- `scripts/c19-ublk.sh` y `scripts/c20-ublk-recovery.sh`, llamados por `bitacora-verify all` como c19 y c20; salen con 77 (omitido) sin root, sin `/dev/ublk-control` o sin permiso. Aún no se han corrido en esta máquina.
+
 ### K2 — Servicios de datos (2026-10-24)
 
 - Snapshots copy-on-write: `Volume::snapshot_create`, `snapshot_delete`, `snapshots` y `read_snapshot`, más `export` (imagen cruda del volumen vivo o de un snapshot). La tabla de snapshots y su flag de borrado van en el superbloque, que se sincroniza antes de volver. Tras un corte, cada snapshot vigente se reconstruye desde el log. Al borrar un snapshot, el espacio que solo él retenía vuelve al GC y a `compact()`. CLI: `bitacora snapshot create|delete|list` y `bitacora export`.

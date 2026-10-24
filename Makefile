@@ -1,4 +1,4 @@
-.PHONY: check criteria
+.PHONY: check criteria ublk
 
 # Single check command (kiln check_command and CI). Before the Cargo workspace
 # exists (K0) there is no product to check.
@@ -15,3 +15,7 @@ check:
 criteria:
 	cargo build --release --workspace --locked
 	./target/release/bitacora-verify all
+
+# Binary with the ublk frontend (needs libclang), used by C19 and C20.
+ublk:
+	cargo build --release -p bitacora --features ublk --locked --target-dir target/ublk

@@ -22,6 +22,7 @@ pub mod c17;
 pub mod c18;
 pub mod c25;
 pub mod cluster;
+pub mod ublk;
 
 use std::error::Error;
 use std::fmt::Display;
@@ -152,6 +153,16 @@ pub const RUNNERS: &[Runner] = &[
         id: "c18",
         default_seed: 1,
         run: c18::run,
+    },
+    Runner {
+        id: "c19",
+        default_seed: 1,
+        run: ublk::c19,
+    },
+    Runner {
+        id: "c20",
+        default_seed: 1,
+        run: ublk::c20,
     },
     Runner {
         id: "c25",

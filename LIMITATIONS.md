@@ -16,6 +16,8 @@ Fuente única de lo que bitacora no demuestra. Ningún otro archivo los repite.
 - Atomicidad garantizada por bloque de 4 KiB, no por petición de varios bloques.
 - Sin checkpoints del índice: el tiempo de apertura crece con el tamaño físico del volumen.
 - Sin TRIM/DISCARD ni WRITE_ZEROES.
+- El frontend ublk tiene una cola de profundidad 64, pero un solo hilo la atiende petición por petición, con llamadas bloqueantes al motor: no hay más de una petición en el motor a la vez por dispositivo.
+- C19 y C20 necesitan root y el módulo `ublk_drv` cargado; sin ellos salen omitidos (77) y el frontend ublk no queda demostrado.
 - Si un bloque del último lote escrito antes de un corte (sin cierre ordenado) se corrompe, no se distingue de una escritura rota y se trata como no escrito.
 - Los snapshots son locales a cada proceso: no se replican ni se migran.
 - La tabla de snapshots del superbloque tiene 64 entradas, y los borrados cuentan hasta que una creación necesita su lugar. Con 64 snapshots vigentes, `snapshot_create` falla.

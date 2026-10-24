@@ -27,7 +27,8 @@ commands:
   elect      --replicas S1,S2,S3
   migrate    --from S --to D
   capacity   project physical capacity from a write history
-  ublk       expose a volume as a ublk block device (feature `ublk`)";
+  ublk       --volume F [--create SIZE] | --recover DEV_ID --volume F
+             expose a volume as a ublk block device (feature `ublk`)";
 
 /// A command line error: a usage error (exit 2) or a failed operation
 /// (exit 1).
@@ -71,6 +72,7 @@ fn run(args: &[String]) -> Result<(), CliError> {
         "replica" => replica_cmd(rest),
         "elect" => elect(rest),
         "migrate" => migrate_cmd(rest),
+        "ublk" => ublk_cmd(rest),
         "help" | "--help" | "-h" => {
             println!("{USAGE}");
             Ok(())
@@ -450,4 +452,61 @@ fn migrate_cmd(args: &[String]) -> Result<(), CliError> {
     let summary = migrate::request(&from, &to)?;
     println!("{}", summary.to_text());
     Ok(())
+}
+
+/// `ublk --volume F [--create SIZE]` creates a ublk device for the volume,
+/// prints its id and serves it until `SIGTERM` or `SIGINT`;
+/// `ublk --recover DEV_ID --volume F` reopens the volume and takes over the
+/// device left by a killed process (contract section 11). `--create`
+/// behaves as in `serve`.
+#[cfg(feature = "ublk")]
+fn ublk_cmd(args: &[String]) -> Result<(), CliError> {
+    let opts = Options::parse(args, &["volume", "create", "recover"])?;
+    if !opts.positional.is_empty() {
+        return Err(CliError::Usage("ublk: unexpected arguments".into()));
+    }
+    let path = PathBuf::from(opts.require("volume")?);
+    let create = opts.get("create").map(parse_size).transpose()?;
+    let recover = opts
+        .get("recover")
+        .map(|id| {
+            id.parse::<u32>()
+                .map_err(|_| CliError::Usage(format!("invalid device id: {id}")))
+        })
+        .transpose()?;
+    if recover.is_some() && create.is_some() {
+        return Err(CliError::Usage("ublk: --recover takes no --create".into()));
+    }
+    // Before any thread exists, so that only the signal thread gets them.
+    server::block_signals().map_err(|e| CliError::Failed(e.to_string()))?;
+    let empty = std::fs::metadata(&path)
+        .map(|m| m.len() == 0)
+        .unwrap_or(true);
+    let vol = match create {
+        Some(size) if empty => {
+            let medium = Arc::new(FileMedium::create(&path, false)?);
+            Volume::create(medium, VolumeConfig::new(size))?
+        }
+        _ => {
+            let medium = Arc::new(FileMedium::open(&path, false)?);
+            let config = VolumeConfig::from_medium(&*medium)?;
+            if let Some(size) = create.filter(|&s| s != config.volume_size) {
+                return Err(CliError::Failed(format!(
+                    "{} has size {}, not {size}",
+                    path.display(),
+                    config.volume_size
+                )));
+            }
+            Volume::open(medium, config)?
+        }
+    };
+    bitacora::ublk::serve(Arc::new(vol), recover)?;
+    Ok(())
+}
+
+#[cfg(not(feature = "ublk"))]
+fn ublk_cmd(_args: &[String]) -> Result<(), CliError> {
+    Err(CliError::Failed(
+        "this binary was built without the `ublk` feature; build it with `make ublk`".into(),
+    ))
 }
