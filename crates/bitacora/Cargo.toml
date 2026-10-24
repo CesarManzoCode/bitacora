@@ -1,0 +1,24 @@
+[package]
+name = "bitacora"
+description = "Log-structured block storage engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "bitacora"
+path = "src/main.rs"
+
+[features]
+ublk = ["dep:libublk"]
+
+[dependencies]
+crc32c = "=0.6.8"
+libc = "=0.2.191"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
+libublk = { version = "=0.4.8", optional = true }
