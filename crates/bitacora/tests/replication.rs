@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -184,9 +184,11 @@ fn a_new_primary_has_every_acknowledged_write() {
     let first = cluster.elect();
 
     let stop = Arc::new(AtomicBool::new(false));
+    let acked_count = Arc::new(AtomicUsize::new(0));
     let sockets = cluster.sockets();
     let writer = {
         let stop = stop.clone();
+        let acked_count = acked_count.clone();
         thread::spawn(move || {
             let mut client = Client::connect_replicas(&sockets).unwrap();
             client.set_failover_timeout(Duration::from_secs(20));
@@ -196,6 +198,7 @@ fn a_new_primary_has_every_acknowledged_write() {
                 // A write without `OK` is not acknowledged and not checked.
                 if client.write(lba, &block(lba + 7)).is_ok() {
                     acked.push(lba);
+                    acked_count.store(acked.len(), Ordering::SeqCst);
                 }
                 lba += 1;
             }
@@ -211,8 +214,10 @@ fn a_new_primary_has_every_acknowledged_write() {
     assert_ne!(second.id, first.id);
     assert!(second.epoch > first.epoch);
     let primary = cluster.get(second.id);
+    // The LSN alone does not count acknowledged writes: the write in flight
+    // when the old primary stopped is sent again and may take a second LSN.
     eventually("writes after the failover", || {
-        primary.volume().status().lsn >= 300
+        primary.volume().status().lsn >= 300 && acked_count.load(Ordering::SeqCst) >= 300
     });
     stop.store(true, Ordering::SeqCst);
     let acked = writer.join().unwrap();
