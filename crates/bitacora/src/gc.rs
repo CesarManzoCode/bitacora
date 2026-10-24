@@ -19,10 +19,11 @@
 //! 5. take the reuse lock exclusively (no read in flight on the victim),
 //!    `punch_hole` the victim and mark it free.
 //!
-//! One GC thread per volume. `GcMode::Auto` runs while free segments are
-//! below 10 % of `max_segments`, limited by a 256 MiB/s token bucket; the
-//! limit is ignored when `GC_RESERVE_SEGMENTS` or fewer segments are free,
-//! and then client writes that need a segment wait (backpressure).
+//! One GC thread per volume. `GcMode::Auto` runs while
+//! `GC_RESERVE_SEGMENTS` or fewer segments are free (ADR 0001): every other
+//! free segment is spare space that lowers the write amplification. The
+//! 256 MiB/s token bucket is ignored at that level, so in `Auto` it never
+//! delays a cycle; client writes that need a segment wait (backpressure).
 //! `GcMode::Continuous` cleans without pause while there are victims.
 
 use std::sync::Arc;
@@ -124,7 +125,7 @@ impl Inner {
         match self.gc.mode {
             GcMode::Off => false,
             GcMode::Continuous => true,
-            GcMode::Auto => self.free_segments * 10 < self.geo.max_segments,
+            GcMode::Auto => self.gc_critical(),
         }
     }
 

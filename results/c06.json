@@ -1,0 +1,27 @@
+{
+  "criterio": "c06",
+  "cargas": {
+    "caliente_fria": {
+      "amplificacion_escritura": 2.4538,
+      "p99_ms": 0.0793,
+      "umbral": 2.5000,
+      "bytes_cliente": 3221225472,
+      "bytes_medio": 7904391168
+    },
+    "uniforme": {
+      "amplificacion_escritura": 2.9102,
+      "p99_ms": 0.0667,
+      "umbral": 3.5000,
+      "bytes_cliente": 3221225472,
+      "bytes_medio": 9374449664
+    }
+  },
+  "maquina": {
+    "cpu": "AMD Ryzen 5 5600G with Radeon Graphics",
+    "kernel": "7.2.11-arch1-1",
+    "disco": "ADATA SU630, DataTraveler 2.0"
+  },
+  "comando": "/home/cesarmanzocode/kiln/projects/bitacora/repo/target/release/bitacora-verify c06",
+  "fecha": "2026-10-24T19:32:30Z",
+  "commit": "aa68e3d4820fe87976b1c337bbdcfebb2658a353-dirty"
+}

@@ -242,11 +242,12 @@ fn disk_models() -> String {
     }
 }
 
+/// `HEAD`, with `-dirty` if tracked files differ from it.
 fn commit() -> String {
     Command::new("git")
         .arg("-C")
         .arg(repo_root())
-        .args(["rev-parse", "HEAD"])
+        .args(["describe", "--always", "--dirty", "--abbrev=40"])
         .output()
         .ok()
         .filter(|o| o.status.success())

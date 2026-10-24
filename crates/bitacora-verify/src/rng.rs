@@ -75,7 +75,7 @@ impl Rng {
 pub fn block_data(seed: u64, lba: u64, version: u64) -> [u8; BLOCK_SIZE] {
     let mut rng = Rng::new(mix(mix(mix(seed) ^ lba) ^ version));
     let mut out = [0u8; BLOCK_SIZE];
-    for word in out.chunks_exact_mut(8) {
+    for word in out.as_chunks_mut::<8>().0 {
         word.copy_from_slice(&rng.next_u64().to_le_bytes());
     }
     out

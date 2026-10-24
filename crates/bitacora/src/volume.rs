@@ -32,7 +32,7 @@ use crate::medium::{AlignedBuf, Medium};
 /// Garbage collection mode (contract section 6).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum GcMode {
-    /// Collect when free segments drop below 10 % of `max_segments`.
+    /// Collect when `GC_RESERVE_SEGMENTS` or fewer segments are free (ADR 0001).
     #[default]
     Auto,
     /// Collect without pause even when space is left (tests).
@@ -741,7 +741,8 @@ impl Inner {
 
     /// Appends the blocks of `data` from block `*done` on, advancing `*done`.
     fn append_from(&mut self, lba: u64, data: &[u8], done: &mut usize) -> Result<()> {
-        for (i, block) in data.chunks_exact(BLOCK_SIZE).enumerate().skip(*done) {
+        let (blocks, _) = data.as_chunks::<BLOCK_SIZE>();
+        for (i, block) in blocks.iter().enumerate().skip(*done) {
             self.append(lba + i as u64, block)?;
             *done = i + 1;
         }

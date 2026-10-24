@@ -179,8 +179,8 @@ pub fn scan(vol: &Volume, model: &Model) -> Scan {
         let n = SCAN_CHUNK.min(blocks - lba);
         match vol.read(lba, n) {
             Ok(buf) => {
-                for (i, block) in buf.chunks_exact(BLOCK_SIZE).enumerate() {
-                    check(&mut scan, lba + i as u64, Some(block));
+                for (i, block) in buf.as_chunks::<BLOCK_SIZE>().0.iter().enumerate() {
+                    check(&mut scan, lba + i as u64, Some(block.as_slice()));
                 }
             }
             Err(_) => {
