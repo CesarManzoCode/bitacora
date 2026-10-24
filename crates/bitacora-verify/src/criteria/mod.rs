@@ -15,6 +15,11 @@ pub mod c10;
 pub mod c11;
 pub mod c12;
 pub mod c13;
+pub mod c16;
+pub mod c17;
+pub mod c18;
+pub mod c25;
+pub mod cluster;
 
 use std::error::Error;
 use std::fmt::Display;
@@ -120,6 +125,26 @@ pub const RUNNERS: &[Runner] = &[
         id: "c13",
         default_seed: 1,
         run: c13::run,
+    },
+    Runner {
+        id: "c16",
+        default_seed: 1,
+        run: c16::run,
+    },
+    Runner {
+        id: "c17",
+        default_seed: 1,
+        run: c17::run,
+    },
+    Runner {
+        id: "c18",
+        default_seed: 1,
+        run: c18::run,
+    },
+    Runner {
+        id: "c25",
+        default_seed: 1,
+        run: c25::run,
     },
 ];
 

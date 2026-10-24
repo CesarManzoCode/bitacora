@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use bitacora::medium::{FileMedium, Medium};
 use bitacora_verify::criteria::c06::CountingMedium;
-use bitacora_verify::criteria::{c05, c09, c10, c13};
+use bitacora_verify::criteria::{c05, c09, c10, c13, c17, c18};
 
 fn test_dir(name: &str) -> PathBuf {
     let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
@@ -109,4 +109,36 @@ fn reduced_c13_restores_the_incremental_snapshot() {
     assert!(r.size_ok());
     assert_eq!(r.entries, r.modified);
     assert!(r.concurrent_writes > 0);
+}
+
+#[test]
+fn reduced_c17_loses_no_acknowledged_write_on_failover() {
+    let dir = test_dir("c17");
+    let p = c17::Params {
+        volume_size: 64 << 20,
+        segment_size: 1 << 20,
+        min_writes: 1,
+        max_writes: 50,
+    };
+    for seed in 1..=2 {
+        let t = c17::trial(&dir, seed, &p).unwrap();
+        assert_eq!(t.lost, 0, "seed {seed}");
+        assert!(t.live_identical, "seed {seed}");
+    }
+}
+
+#[test]
+fn reduced_c18_accepts_nothing_from_the_old_epoch() {
+    let dir = test_dir("c18");
+    let p = c18::Params {
+        volume_size: 64 << 20,
+        segment_size: 1 << 20,
+        min_writes: 1,
+        max_writes: 50,
+        forged_entries: 4,
+    };
+    for seed in 1..=2 {
+        let t = c18::trial(&dir, seed, &p).unwrap();
+        assert_eq!(t.accepted(), 0, "seed {seed}");
+    }
 }
