@@ -12,15 +12,19 @@ pub mod c07;
 pub mod c08;
 pub mod c09;
 pub mod c10;
+pub mod c11;
+pub mod c12;
 
 use std::error::Error;
 use std::fmt::Display;
 use std::fs::{self, File};
-use std::io::Write;
-use std::path::PathBuf;
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
 
 use bitacora::Volume;
 use bitacora::format::BLOCK_SIZE;
+
+use sha2::{Digest, Sha256};
 
 use crate::model::Model;
 use crate::rng::block_data;
@@ -100,6 +104,16 @@ pub const RUNNERS: &[Runner] = &[
         id: "c10",
         default_seed: 1,
         run: c10::run,
+    },
+    Runner {
+        id: "c11",
+        default_seed: 1,
+        run: c11::run,
+    },
+    Runner {
+        id: "c12",
+        default_seed: 1,
+        run: c12::run,
     },
 ];
 
@@ -205,6 +219,51 @@ pub fn holds_version(seed: u64, lba: u64, data: &[u8], min: u64, max: u64) -> bo
         return true;
     }
     (min.max(1)..=max).any(|v| data == block_data(seed, lba, v))
+}
+
+/// Lowercase hex of a SHA-256 digest.
+fn hex(hasher: Sha256) -> String {
+    hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
+/// SHA-256 of the raw image the model describes (`blocks × 4096` bytes).
+pub fn model_sha256(model: &Model) -> String {
+    let mut h = Sha256::new();
+    for lba in 0..model.blocks() {
+        h.update(model.expected(lba));
+    }
+    hex(h)
+}
+
+/// SHA-256 of a file.
+pub fn file_sha256(path: &Path) -> std::io::Result<String> {
+    let mut file = File::open(path)?;
+    let mut h = Sha256::new();
+    let mut buf = vec![0u8; 1 << 20];
+    loop {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
+            return Ok(hex(h));
+        }
+        h.update(&buf[..n]);
+    }
+}
+
+/// SHA-256 of a version of a volume read block range by block range.
+pub fn version_sha256(vol: &Volume, version: bitacora::Version) -> bitacora::Result<String> {
+    let mut h = Sha256::new();
+    let blocks = vol.blocks();
+    let mut lba = 0;
+    while lba < blocks {
+        let n = SCAN_CHUNK.min(blocks - lba);
+        h.update(vol.read_at_version(version, lba, n)?);
+        lba += n;
+    }
+    Ok(hex(h))
 }
 
 /// Root of the repository, where `thresholds.json` and `results/` live.

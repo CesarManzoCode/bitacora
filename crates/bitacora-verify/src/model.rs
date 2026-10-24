@@ -5,6 +5,8 @@ use bitacora::format::BLOCK_SIZE;
 
 use crate::rng::block_data;
 
+/// Cloning a model freezes it, like a snapshot of the volume.
+#[derive(Clone)]
 pub struct Model {
     seed: u64,
     /// Version of each block; 0 = never written.
@@ -44,6 +46,11 @@ impl Model {
             0 => [0; BLOCK_SIZE],
             v => block_data(self.seed, lba, u64::from(v)),
         }
+    }
+
+    /// Versions of every block; 0 = never written.
+    pub fn versions(&self) -> &[u32] {
+        &self.versions
     }
 
     /// Whether one block read from `lba` matches the model.

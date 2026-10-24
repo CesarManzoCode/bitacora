@@ -14,7 +14,12 @@
 //!    Every hot segment is checked, not only the last one: older segments were
 //!    fully synced, so a loss there is just as real.
 //! 5. Rebuild by sorting `(lba, birth)`: the live index takes the greatest
-//!    `birth` of each LBA.
+//!    `birth` of each LBA and each snapshot S still in the table the greatest
+//!    `birth` ≤ S.lsn. A record's `refcount` is the number of versions that
+//!    took it. Pages equal to those of the next newer version are shared
+//!    again, as before the crash. A snapshot whose LSN is past the end of
+//!    the recovered log fails the open with `Corrupt`: it was synced before
+//!    the snapshot was recorded, so that is a loss.
 //! 6. The caller opens a new hot segment on the first write.
 //!
 //! Cold stream (GC relocations): its batches keep the original `birth`, so
@@ -48,6 +53,8 @@ pub(super) struct Recovered {
     pub index: Index,
     pub records: RecordTable,
     pub segments: Vec<Option<SegmentInfo>>,
+    /// `(id, lsn, index)` of every snapshot passed in, in the same order.
+    pub snapshots: Vec<(u64, u64, Index)>,
     /// Greatest LSN found in the log (0 for an empty volume).
     pub last_lsn: u64,
     pub next_seg_gen: u64,
@@ -79,7 +86,13 @@ struct Found {
     data_crc: u32,
 }
 
-pub(super) fn recover(medium: &dyn Medium, geo: &Geometry, durable_lsn: u64) -> Result<Recovered> {
+/// `snapshots` holds `(id, lsn)` of every snapshot not deleted.
+pub(super) fn recover(
+    medium: &dyn Medium,
+    geo: &Geometry,
+    durable_lsn: u64,
+    snapshots: &[(u64, u64)],
+) -> Result<Recovered> {
     let len = medium.len()?;
     let data_start = segment_offset(0, geo.segment_size);
     let slots = if len <= data_start {
@@ -133,7 +146,7 @@ pub(super) fn recover(medium: &dyn Medium, geo: &Geometry, durable_lsn: u64) -> 
     }
     medium.sync()?;
 
-    rebuild(geo, &segs)
+    rebuild(geo, &segs, snapshots)
 }
 
 /// Follows the chain of batch summaries of one segment (point 2).
@@ -293,9 +306,14 @@ fn clear_stop(medium: &dyn Medium, geo: &Geometry, len: u64, seg: &ScannedSegmen
     medium.write_at(&AlignedBuf::zeroed(BLOCK_SIZE), offset)
 }
 
-/// Point 5: the live index takes the greatest `birth` of each LBA. A birth
-/// found twice (an original and its relocation) keeps the newest location.
-fn rebuild(geo: &Geometry, segs: &[ScannedSegment]) -> Result<Recovered> {
+/// Point 5: the live index takes the greatest `birth` of each LBA and each
+/// snapshot the greatest `birth` ≤ its LSN. A birth found twice (an original
+/// and its relocation) keeps the newest location.
+fn rebuild(
+    geo: &Geometry,
+    segs: &[ScannedSegment],
+    snapshots: &[(u64, u64)],
+) -> Result<Recovered> {
     let mut found = Vec::new();
     let mut segments = vec![None; geo.max_segments as usize];
     let mut last_lsn = 0;
@@ -332,30 +350,85 @@ fn rebuild(geo: &Geometry, segs: &[ScannedSegment]) -> Result<Recovered> {
         });
     }
 
+    if let Some((id, lsn)) = snapshots.iter().find(|(_, lsn)| *lsn > last_lsn) {
+        return Err(Error::Corrupt(format!(
+            "snapshot {id} was taken at LSN {lsn}, but the log ends at LSN {last_lsn}"
+        )));
+    }
+
     found.sort_unstable_by_key(|f| (f.lba, f.birth, f.seg_gen));
     let mut index = Index::new(geo.blocks);
+    let mut frozen: Vec<(u64, u64, Index)> = snapshots
+        .iter()
+        .map(|&(id, lsn)| (id, lsn, Index::new(geo.blocks)))
+        .collect();
     let mut records = RecordTable::new(geo.max_segments as usize);
-    // K2: each live snapshot S also takes the greatest birth ≤ S.lsn here.
-    for (i, f) in found.iter().enumerate() {
-        if found.get(i + 1).is_some_and(|next| next.lba == f.lba) {
-            continue;
+    let mut start = 0;
+    let mut versions: Vec<&Found> = Vec::new();
+    let mut taken: Vec<u64> = Vec::new();
+    while start < found.len() {
+        let lba = found[start].lba;
+        let end = start + found[start..].partition_point(|f| f.lba == lba);
+        let group = &found[start..end];
+        // One entry per birth: the last one, with the greatest `seg_gen`.
+        versions.clear();
+        versions.extend(
+            group
+                .iter()
+                .enumerate()
+                .filter(|(i, f)| group.get(i + 1).is_none_or(|n| n.birth != f.birth))
+                .map(|(_, f)| f),
+        );
+        taken.clear();
+        let live = versions[versions.len() - 1];
+        take(&mut records, &mut taken, live)?;
+        index.set(lba, live.birth);
+        for (_, lsn, snap) in frozen.iter_mut() {
+            let k = versions.partition_point(|f| f.birth <= *lsn);
+            if k > 0 {
+                let f = versions[k - 1];
+                take(&mut records, &mut taken, f)?;
+                snap.set(lba, f.birth);
+            }
         }
-        if !records.insert(f.birth, f.segment, f.block, f.data_crc) {
-            return Err(Error::Corrupt(format!(
-                "birth {} is the current version of more than one lba",
-                f.birth
-            )));
-        }
-        index.set(f.lba, f.birth);
+        start = end;
+    }
+
+    // Share pages along the chain, newest first: each snapshot with the next
+    // newer one, the newest with the live index.
+    let mut order: Vec<usize> = (0..frozen.len()).collect();
+    order.sort_by_key(|&i| frozen[i].1);
+    let mut newer = index.clone();
+    for &i in order.iter().rev() {
+        frozen[i].2.share_with(&newer);
+        newer = frozen[i].2.clone();
     }
 
     Ok(Recovered {
         index,
         records,
         segments,
+        snapshots: frozen,
         last_lsn,
         next_seg_gen: max_gen + 1,
     })
+}
+
+/// One more version of the LBA being rebuilt references `f`. `taken` holds
+/// the births of that LBA already in the table.
+fn take(records: &mut RecordTable, taken: &mut Vec<u64>, f: &Found) -> Result<()> {
+    if taken.contains(&f.birth) {
+        records.incref(f.birth);
+        return Ok(());
+    }
+    if !records.insert(f.birth, f.segment, f.block, f.data_crc) {
+        return Err(Error::Corrupt(format!(
+            "birth {} is a version of more than one lba",
+            f.birth
+        )));
+    }
+    taken.push(f.birth);
+    Ok(())
 }
 
 /// Reads exactly `len` bytes at `offset`; `None` if the medium ends first.

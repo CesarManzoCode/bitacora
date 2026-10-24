@@ -84,6 +84,21 @@ impl Index {
         &self.pages
     }
 
+    /// Replaces every page equal to the same page of `other` with a pointer
+    /// to it, so that both versions share it (used after recovery, which
+    /// builds each version separately).
+    pub fn share_with(&mut self, other: &Index) {
+        for (mine, theirs) in self.pages.iter_mut().zip(&other.pages) {
+            let Some(b) = theirs else {
+                continue;
+            };
+            let equal = mine.as_ref().is_some_and(|a| !Arc::ptr_eq(a, b) && **a == **b);
+            if equal {
+                *mine = Some(b.clone());
+            }
+        }
+    }
+
     /// Every written LBA with its `birth`, in LBA order.
     pub fn written(&self) -> impl Iterator<Item = (u64, u64)> + '_ {
         self.pages.iter().enumerate().flat_map(|(pi, p)| {

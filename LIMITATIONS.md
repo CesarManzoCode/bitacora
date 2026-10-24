@@ -18,6 +18,9 @@ Fuente única de lo que bitacora no demuestra. Ningún otro archivo los repite.
 - Sin TRIM/DISCARD ni WRITE_ZEROES.
 - Si un bloque del último lote escrito antes de un corte (sin cierre ordenado) se corrompe, no se distingue de una escritura rota y se trata como no escrito.
 - Los snapshots son locales a cada proceso: no se replican ni se migran.
+- La tabla de snapshots del superbloque tiene 64 entradas, y los borrados cuentan hasta que una creación necesita su lugar. Con 64 snapshots vigentes, `snapshot_create` falla.
+- `export` del volumen vivo no es una imagen de un instante: lee por tramos, y una escritura concurrente puede aparecer en unos tramos y no en otros. Para una imagen de un instante hay que exportar un snapshot.
+- Tras reabrir, cada snapshot se reconstruye recorriendo el log. Las páginas del índice iguales a las de la versión siguiente se vuelven a compartir, pero la reconstrucción usa memoria temporal proporcional a los bloques escritos por cada snapshot.
 - En `GcMode::Auto` el GC no deja colchón de segmentos libres: corre solo con 2 o menos (ADR 0001). La cubeta de 256 MiB/s nunca lo frena, y una escritura que necesita un segmento espera a que termine un ciclo del GC si este no acabó antes.
 - El volumen corre sobre un archivo en btrfs en la máquina de medición; el copy-on-write del sistema de archivos de abajo añade su propia amplificación, que no se descuenta.
 - Un segmento con un bloque vivo que no pasa su `data_crc` se marca dañado y el GC no lo reclama: su espacio no vuelve al volumen.

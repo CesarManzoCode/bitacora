@@ -12,10 +12,15 @@
 //! already has its final place in the hot segment, so its record is inserted
 //! at write time and only the bytes wait in memory.
 //!
+//! Snapshots (`snapshot.rs`) are frozen copies of the index kept in `Inner`
+//! next to the live one; every version that references a `birth` counts in
+//! its record's `refcount`.
+//!
 //! Lock order: `Core::gc_lock`, then `Core::reuse`, then `Core::inner`.
 
 mod recovery;
 
+use std::collections::BTreeMap;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, RwLock};
 use std::thread::JoinHandle;
 
@@ -28,6 +33,7 @@ use crate::format::{
 use crate::gc::{self, GC_RESERVE_SEGMENTS, GcState, GcStatus};
 use crate::index::{Index, RecordTable};
 use crate::medium::{AlignedBuf, Medium};
+use crate::snapshot::Frozen;
 
 /// Garbage collection mode (contract section 6).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -69,6 +75,15 @@ impl VolumeConfig {
     pub fn with_gc_mode(mut self, gc_mode: GcMode) -> Self {
         self.gc_mode = gc_mode;
         self
+    }
+
+    /// The configuration an existing volume was created with, read from its
+    /// current superblock, with `GcMode::Auto`.
+    pub fn from_medium(medium: &dyn Medium) -> Result<Self> {
+        let mut slots = vec![0u8; 2 * BLOCK_SIZE];
+        medium.read_at(&mut slots, 0)?;
+        let (_, sb) = select_superblock(&slots[..BLOCK_SIZE], &slots[BLOCK_SIZE..])?;
+        Ok(VolumeConfig::new(sb.volume_size).with_segment_size(sb.segment_size))
     }
 
     /// `ceil(volume_size × 1.25 / segment_size) + 4`.
@@ -126,7 +141,8 @@ pub struct VolumeStatus {
     pub max_segments: u64,
     pub segments_used: u64,
     pub segments_free: u64,
-    /// Bytes of block versions still referenced by the live volume.
+    /// Bytes of block versions still referenced by the live volume or by a
+    /// snapshot.
     pub live_bytes: u64,
     pub gc: GcStatus,
 }
@@ -224,10 +240,12 @@ pub(crate) struct Inner {
     pub(crate) medium: Arc<dyn Medium>,
     pub(crate) geo: Geometry,
     pub(crate) state: VolumeState,
-    sb: Superblock,
+    pub(crate) sb: Superblock,
     /// Slot holding the current superblock.
     sb_slot: SuperblockSlot,
-    index: Index,
+    pub(crate) index: Index,
+    /// Snapshots not deleted, by id.
+    pub(crate) snapshots: BTreeMap<u64, Frozen>,
     pub(crate) records: RecordTable,
     pub(crate) segments: Vec<Option<SegmentInfo>>,
     pub(crate) free_segments: u64,
@@ -300,7 +318,7 @@ impl Core {
         }
     }
 
-    fn kick_gc(&self, inner: &mut Inner) {
+    pub(crate) fn kick_gc(&self, inner: &mut Inner) {
         if std::mem::take(&mut inner.gc.kick) {
             self.gc_wake.notify_all();
         }
@@ -309,7 +327,7 @@ impl Core {
 
 /// A block volume over a `Medium`. `Send + Sync`: share it with `Arc`.
 pub struct Volume {
-    core: Arc<Core>,
+    pub(crate) core: Arc<Core>,
     gc_thread: Mutex<Option<JoinHandle<()>>>,
 }
 
@@ -390,7 +408,13 @@ impl Volume {
             sb.segment_size,
             sb.max_segments,
         );
-        let rec = recovery::recover(&*medium, &geo, sb.durable_lsn)?;
+        let frozen: Vec<(u64, u64)> = sb
+            .snapshots
+            .iter()
+            .filter(|s| !s.is_deleted())
+            .map(|s| (s.snapshot_id, s.lsn))
+            .collect();
+        let rec = recovery::recover(&*medium, &geo, sb.durable_lsn, &frozen)?;
 
         // Recovery synced the medium, so everything recovered is durable.
         sb.durable_lsn = rec.last_lsn;
@@ -398,6 +422,11 @@ impl Volume {
         let mut inner = Inner::new(medium.clone(), geo, sb, slot, config.gc_mode);
         inner.index = rec.index;
         inner.records = rec.records;
+        inner.snapshots = rec
+            .snapshots
+            .into_iter()
+            .map(|(id, lsn, index)| (id, Frozen { lsn, index }))
+            .collect();
         inner.free_segments = rec.segments.iter().filter(|s| s.is_none()).count() as u64;
         inner.segments = rec.segments;
         inner.next_lsn = rec.last_lsn + 1;
@@ -455,6 +484,16 @@ impl Volume {
     /// Reads `nblocks` blocks from `lba`. Never-written blocks read as zeros;
     /// a block whose `data_crc` fails returns `Error::Integrity`, never data.
     pub fn read(&self, lba: u64, nblocks: u64) -> Result<Vec<u8>> {
+        self.read_version(None, lba, nblocks)
+    }
+
+    /// `read` of the live volume (`None`) or of snapshot `Some(id)`.
+    pub(crate) fn read_version(
+        &self,
+        snapshot: Option<u64>,
+        lba: u64,
+        nblocks: u64,
+    ) -> Result<Vec<u8>> {
         let core = &*self.core;
         let _reuse = core.reuse.read().map_err(|_| Error::Failed)?;
         let len = usize::try_from(nblocks)
@@ -467,8 +506,16 @@ impl Volume {
             let inner = core.lock()?;
             inner.usable()?;
             core.geo.check_range(lba, nblocks)?;
+            let index = match snapshot {
+                None => &inner.index,
+                Some(id) => &inner
+                    .snapshots
+                    .get(&id)
+                    .ok_or_else(|| Error::InvalidArgument(format!("no snapshot {id}")))?
+                    .index,
+            };
             for slot in 0..nblocks {
-                let birth = inner.index.get(lba + slot);
+                let birth = index.get(lba + slot);
                 if birth == 0 {
                     continue;
                 }
@@ -668,6 +715,7 @@ impl Inner {
             sb,
             sb_slot,
             index: Index::new(geo.blocks),
+            snapshots: BTreeMap::new(),
             records: RecordTable::new(geo.max_segments as usize),
             segments: vec![None; geo.max_segments as usize],
             free_segments: geo.max_segments,
@@ -716,7 +764,7 @@ impl Inner {
 
     /// Writes the superblock to the slot that does not hold the current one
     /// and syncs it.
-    fn write_superblock(&mut self) -> Result<()> {
+    pub(crate) fn write_superblock(&mut self) -> Result<()> {
         self.sb.sb_seq += 1;
         let slot = self.sb_slot.other();
         let buf = self.sb.encode()?;

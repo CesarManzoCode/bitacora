@@ -2,6 +2,13 @@
 
 ## [Sin publicar]
 
+### K2 — Servicios de datos (en curso)
+
+- Snapshots copy-on-write: `Volume::snapshot_create`, `snapshot_delete`, `snapshots`, `read_snapshot` y `export` (imagen cruda de `volume_size` bytes del vivo o de un snapshot). La tabla de snapshots y el flag de borrado se guardan en el superbloque, que se sincroniza antes de volver. Tras un corte, la recuperación reconstruye cada snapshot vigente con el `birth` máximo ≤ su LSN.
+- El GC libera solo los registros sin referencias; al borrar un snapshot, el espacio que solo él retenía vuelve a ser reclamable por `compact()` y por el GC.
+- CLI: `bitacora snapshot create|delete ID|list --volume F` y `bitacora export --volume F [--snapshot ID] --out IMG`.
+- `bitacora-verify`: corredores c11 y c12.
+
 ### K1 — Volumen durable (2026-10-24)
 
 - Volumen de bloques de 4 KiB sobre un archivo ordinario, usable como biblioteca (`Volume`): `create`, `open`, `write`, `write_fua`, `read`, `flush`, `close`, `status` y `locate`, en el formato `bitacora-volume/1`. Se puede compartir entre hilos.
