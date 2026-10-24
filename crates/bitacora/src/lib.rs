@@ -10,6 +10,7 @@ pub mod format;
 pub mod gc;
 pub mod index;
 pub mod medium;
+pub mod migrate;
 pub mod replica;
 pub mod server;
 pub mod snapshot;

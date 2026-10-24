@@ -1,8 +1,12 @@
 //! Client of the Unix socket protocol (contract section 8).
 //!
 //! Requests go one at a time over a single connection. A `MOVED` answer
-//! means the request was not executed: the client reconnects to the socket
-//! in its payload and sends the same request again.
+//! means the request was not executed (contract section 10): the client
+//! reconnects to the socket in its payload and sends the same request
+//! again, so the request is acknowledged exactly once, by the server that
+//! executed it. Connecting to the destination is retried for
+//! `MOVED_CONNECT_TIMEOUT`; a request whose destination never accepts fails
+//! without having been executed anywhere.
 //!
 //! With a list of replica sockets (`connect_replicas`, contract section 9)
 //! the client looks for the primary: on `NOT_PRIMARY`, `FENCED` or a broken
@@ -25,6 +29,11 @@ use crate::wire::{self, Op, Request, Response, Status};
 
 /// `MOVED` answers followed for one request before giving up.
 pub const MAX_REDIRECTS: usize = 8;
+/// How long the client keeps trying to connect to the destination of a
+/// `MOVED` answer.
+pub const MOVED_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+/// Pause between two connection attempts to a `MOVED` destination.
+const MOVED_CONNECT_PAUSE: Duration = Duration::from_millis(5);
 /// How long a client with several replicas keeps looking for the primary.
 pub const DEFAULT_FAILOVER_TIMEOUT: Duration = Duration::from_secs(30);
 /// Socket timeout of a client with several replicas, so that a stopped
@@ -356,11 +365,22 @@ impl Client {
         Ok(resp)
     }
 
+    /// Connects to the destination of a `MOVED` answer, retrying until
+    /// `MOVED_CONNECT_TIMEOUT`.
     fn reconnect(&mut self, path: PathBuf) -> ClientResult<()> {
         self.conn = None;
-        self.conn = Some(open(&path, self.io_timeout)?);
-        self.path = path;
-        Ok(())
+        let deadline = Instant::now() + MOVED_CONNECT_TIMEOUT;
+        loop {
+            match open(&path, self.io_timeout) {
+                Ok(conn) => {
+                    self.conn = Some(conn);
+                    self.path = path;
+                    return Ok(());
+                }
+                Err(e) if Instant::now() >= deadline => return Err(ClientError::Io(e)),
+                Err(_) => thread::sleep(MOVED_CONNECT_PAUSE),
+            }
+        }
     }
 }
 

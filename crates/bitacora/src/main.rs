@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use bitacora::backup;
 use bitacora::medium::FileMedium;
-use bitacora::{replica, server};
+use bitacora::{migrate, replica, server};
 use bitacora::{Client, GcMode, Replica, ReplicaConfig, Server, Version, Volume, VolumeConfig};
 
 const USAGE: &str = "\
@@ -20,12 +20,12 @@ commands:
   backup     full --volume F [--snapshot ID] --out BKP
              incremental --volume F --base ID [--snapshot ID] --out BKP
   restore    --out F BKP...
-  serve      --volume F --socket S [--create SIZE]
+  serve      --volume F --socket S [--create SIZE] [--migrate-target]
   status     --socket S [--json]
   replica    --id N --volume F --socket S --peers ID=S,... [--create SIZE]
              [--segment-size SIZE]
   elect      --replicas S1,S2,S3
-  migrate    live-migrate a volume between servers
+  migrate    --from S --to D
   capacity   project physical capacity from a write history
   ublk       expose a volume as a ublk block device (feature `ublk`)";
 
@@ -70,6 +70,7 @@ fn run(args: &[String]) -> Result<(), CliError> {
         "status" => status(rest),
         "replica" => replica_cmd(rest),
         "elect" => elect(rest),
+        "migrate" => migrate_cmd(rest),
         "help" | "--help" | "-h" => {
             println!("{USAGE}");
             Ok(())
@@ -250,12 +251,20 @@ fn parse_size(text: &str) -> Result<u64, CliError> {
         .ok_or_else(|| CliError::Usage(format!("invalid size: {text}")))
 }
 
-/// `serve --volume F --socket S [--create SIZE]`: serves the volume until
-/// `SIGTERM` or `SIGINT`, then closes it. With `--create`, a missing or
-/// empty file becomes a new volume of SIZE bytes; an existing volume is
-/// opened and must have that size.
+/// `serve --volume F --socket S [--create SIZE] [--migrate-target]`:
+/// serves the volume until `SIGTERM` or `SIGINT`, then closes it. With
+/// `--create`, a missing or empty file becomes a new volume of SIZE bytes;
+/// an existing volume is opened and must have that size. With
+/// `--migrate-target`, the server waits for a live migration and serves
+/// only once a source commits it (contract section 10).
 fn serve(args: &[String]) -> Result<(), CliError> {
-    let opts = Options::parse(args, &["volume", "socket", "create"])?;
+    let target = args.iter().any(|a| a == "--migrate-target");
+    let rest: Vec<String> = args
+        .iter()
+        .filter(|a| *a != "--migrate-target")
+        .cloned()
+        .collect();
+    let opts = Options::parse(&rest, &["volume", "socket", "create"])?;
     if !opts.positional.is_empty() {
         return Err(CliError::Usage("serve: unexpected arguments".into()));
     }
@@ -289,7 +298,11 @@ fn serve(args: &[String]) -> Result<(), CliError> {
         }
     };
     let vol = Arc::new(vol);
-    let srv = Server::bind(vol.clone(), &socket)?;
+    let srv = if target {
+        Server::bind_migrate_target(vol.clone(), &socket)?
+    } else {
+        Server::bind(vol.clone(), &socket)?
+    };
     server::shutdown_on_signal(srv.handle()).map_err(|e| CliError::Failed(e.to_string()))?;
     let served = srv.run();
     let closed = vol.close();
@@ -409,5 +422,22 @@ fn elect(args: &[String]) -> Result<(), CliError> {
         elected.epoch,
         elected.socket.display()
     );
+    Ok(())
+}
+
+/// `migrate --from S --to D`: the server at S migrates its volume live to
+/// the server at D, started with `serve --migrate-target`, and from then on
+/// answers `MOVED(D)`. Prints the rounds and blocks sent.
+fn migrate_cmd(args: &[String]) -> Result<(), CliError> {
+    let opts = Options::parse(args, &["from", "to"])?;
+    if !opts.positional.is_empty() {
+        return Err(CliError::Usage("migrate: unexpected arguments".into()));
+    }
+    let from = PathBuf::from(opts.require("from")?);
+    // The source connects to D from its own working directory.
+    let to = std::fs::canonicalize(opts.require("to")?)
+        .map_err(|e| CliError::Failed(format!("destination socket: {e}")))?;
+    let summary = migrate::request(&from, &to)?;
+    println!("{}", summary.to_text());
     Ok(())
 }

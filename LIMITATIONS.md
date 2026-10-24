@@ -40,6 +40,10 @@ Fuente única de lo que bitacora no demuestra. Ningún otro archivo los repite.
 - `epoch_history` guarda hasta 64 épocas. Un seguidor cuya última época ya salió del historial del principal recibe una resincronización completa.
 - La cola de bloques pendientes del principal guarda hasta 16,384 bloques (64 MiB) por seguidor; uno que se atrasa más se resincroniza desde el volumen.
 - Un principal fijo en `SIGSTOP` no se entera de la nueva época hasta que reanuda: al reanudar, su primer `APPEND` o latido recibe `FENCED`.
+- La migración en vivo solo mueve un volumen servido sin réplicas (`bitacora serve`), a un destino nuevo del mismo tamaño. Hay una migración a la vez por origen.
+- Si el destino falla después de que el origen subió la época y antes de confirmar el commit, el origen vuelve a servir con la época nueva y la migración hay que repetirla con un destino nuevo; no hay reanudación.
+- Mientras la migración está congelada, las peticiones nuevas del origen esperan sin plazo. Si el servidor de origen se apaga en ese momento, esas conexiones no terminan hasta que la migración acaba.
+- Desde la ronda 5, cada escritura reconocida por el origen tarda al menos 1 ms más; el retraso se quita al congelar.
 
 ## Verificación
 

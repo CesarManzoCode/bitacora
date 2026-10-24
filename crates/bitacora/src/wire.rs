@@ -10,9 +10,10 @@
 //! `WRITE_FUA` carry them; `STATUS` returns `bitacora-status/1` JSON;
 //! `SNAPSHOT_CREATE` returns the new id as u64; `SNAPSHOT_DELETE` carries the
 //! id as u64; `EXPORT` carries the version as u64 (0 = live, otherwise the
-//! snapshot id) followed by the UTF-8 output path. A response with a status
-//! other than `OK` carries a UTF-8 message, except `MOVED`, whose payload is
-//! the path of the destination socket.
+//! snapshot id) followed by the UTF-8 output path. `MIGRATE` and the other
+//! frames of live migration are described in `migrate.rs`. A response with
+//! a status other than `OK` carries a UTF-8 message, except `MOVED`, whose
+//! payload is the path of the destination socket.
 //!
 //! Decoding never panics: a truncated, oversized or unknown frame is a
 //! `WireError`.
@@ -56,10 +57,13 @@ pub enum Op {
     MigrateFreeze = 33,
     /// Migration: the destination adopts the new epoch and serves.
     MigrateCommit = 34,
+    /// Migration: `bitacora migrate` asks the source to migrate to the
+    /// socket in the payload.
+    Migrate = 35,
 }
 
 impl Op {
-    pub const ALL: [Op; 16] = [
+    pub const ALL: [Op; 17] = [
         Op::Read,
         Op::Write,
         Op::WriteFua,
@@ -76,6 +80,7 @@ impl Op {
         Op::MigrateData,
         Op::MigrateFreeze,
         Op::MigrateCommit,
+        Op::Migrate,
     ];
 
     pub fn from_u8(code: u8) -> Option<Op> {

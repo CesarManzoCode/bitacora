@@ -2,7 +2,9 @@
 //! the requests of a connection answered in order, one at a time.
 //!
 //! What a request does is up to a `Handler`: a standalone volume
-//! (`Server::bind`) or a replica (`replica.rs`, through `Server::with_handler`).
+//! (`Server::bind`, or `Server::bind_migrate_target` for the destination of
+//! a live migration, `migrate.rs`) or a replica (`replica.rs`, through
+//! `Server::with_handler`).
 //!
 //! Shutdown is orderly: `ServerHandle::shutdown` stops accepting, closes the
 //! read side of every connection so each thread finishes the request in
@@ -17,11 +19,12 @@ use std::os::unix::fs::FileTypeExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
 use crate::error::{Error, Result};
 use crate::format::BLOCK_SIZE;
+use crate::migrate::{self, Gate};
 use crate::snapshot::Version;
 use crate::status::StatusReport;
 use crate::volume::Volume;
@@ -36,8 +39,8 @@ pub trait Handler: Send + Sync {
 /// A volume served without replicas.
 struct Standalone {
     volume: Arc<Volume>,
-    /// Destination socket once the volume moved (section 10).
-    moved: RwLock<Option<String>>,
+    /// Admission of requests during a live migration (section 10).
+    gate: Gate,
 }
 
 /// State shared by the accept loop, the connections and the handles.
@@ -68,10 +71,18 @@ impl Server {
     /// socket file left by a previous process. Any other existing file is an
     /// error.
     pub fn bind(volume: Arc<Volume>, socket: &Path) -> Result<Server> {
-        let standalone = Arc::new(Standalone {
-            volume,
-            moved: RwLock::new(None),
-        });
+        Server::bind_gated(volume, Gate::serving(), socket)
+    }
+
+    /// Serves `volume` as the destination of a live migration: data
+    /// requests are answered `NOT_PRIMARY` until a source commits its
+    /// migration here. `volume` should be new and of the source's size.
+    pub fn bind_migrate_target(volume: Arc<Volume>, socket: &Path) -> Result<Server> {
+        Server::bind_gated(volume, Gate::target(), socket)
+    }
+
+    fn bind_gated(volume: Arc<Volume>, gate: Gate, socket: &Path) -> Result<Server> {
+        let standalone = Arc::new(Standalone { volume, gate });
         Server::open(standalone.clone(), Some(standalone), socket)
     }
 
@@ -182,14 +193,14 @@ impl ServerHandle {
     /// a request answered `MOVED` is not executed. Only a standalone volume
     /// moves; on any other server it does nothing.
     pub fn set_moved(&self, destination: &str) {
-        let Some(standalone) = &self.shared.standalone else {
-            return;
-        };
-        let mut moved = match standalone.moved.write() {
-            Ok(m) => m,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        *moved = Some(destination.to_string());
+        if let Some(standalone) = &self.shared.standalone {
+            standalone.gate.set_moved(destination);
+        }
+    }
+
+    /// The destination socket once the standalone volume moved.
+    pub fn moved_to(&self) -> Option<String> {
+        self.shared.standalone.as_ref()?.gate.moved_to()
     }
 
     /// The volume of a standalone server.
@@ -236,18 +247,31 @@ pub fn error_status(e: &Error) -> Status {
 }
 
 impl Handler for Standalone {
-    /// Answers one request: `MOVED` once the volume moved, `FENCED` for an
-    /// epoch older than the volume's, otherwise the result of the engine
-    /// call.
+    /// Answers one request. Migration frames go to `migrate.rs`; any other
+    /// request passes the gate, which answers `MOVED` once the volume moved,
+    /// holds it while a migration is frozen and refuses it on a destination
+    /// before the commit (except `STATUS`). Then `FENCED` for an epoch older
+    /// than the volume's, otherwise the result of the engine call.
     fn handle(&self, req: &Request) -> Response {
-        let moved = match self.moved.read() {
-            Ok(m) => m.clone(),
-            Err(poisoned) => poisoned.into_inner().clone(),
-        };
-        if let Some(dest) = moved {
-            return Response::error(req.req_id, Status::Moved, &dest);
-        }
         let vol = &self.volume;
+        match req.op {
+            Op::Migrate => {
+                let result = std::str::from_utf8(&req.payload)
+                    .map_err(|_| Error::InvalidArgument("destination is not UTF-8".into()))
+                    .and_then(|dest| migrate::run_source(vol, &self.gate, dest))
+                    .map(|summary| summary.to_text().into_bytes());
+                return respond(req, result);
+            }
+            Op::MigrateData | Op::MigrateFreeze | Op::MigrateCommit => {
+                return respond(req, migrate::handle_target(vol, &self.gate, req));
+            }
+            _ => {}
+        }
+        let ticket = match self.gate.enter() {
+            Ok(ticket) => Some(ticket),
+            Err(migrate::Refusal::NotPrimary) if req.op == Op::Status => None,
+            Err(refusal) => return migrate::refusal(req, refusal),
+        };
         if req.epoch != 0 && req.epoch < vol.epoch() {
             return Response::error(
                 req.req_id,
@@ -259,7 +283,12 @@ impl Handler for Standalone {
             Op::Status => StatusReport::standalone(vol, None).map(|r| r.to_json().into_bytes()),
             _ => execute(vol, req),
         };
-        respond(req, result)
+        if let Some(ticket) = &ticket {
+            migrate::throttle(ticket, req.op);
+        }
+        let resp = respond(req, result);
+        drop(ticket);
+        resp
     }
 }
 

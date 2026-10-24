@@ -15,6 +15,8 @@ pub mod c10;
 pub mod c11;
 pub mod c12;
 pub mod c13;
+pub mod c14;
+pub mod c15;
 pub mod c16;
 pub mod c17;
 pub mod c18;
@@ -125,6 +127,16 @@ pub const RUNNERS: &[Runner] = &[
         id: "c13",
         default_seed: 1,
         run: c13::run,
+    },
+    Runner {
+        id: "c14",
+        default_seed: 1,
+        run: c14::run,
+    },
+    Runner {
+        id: "c15",
+        default_seed: 1,
+        run: c15::run,
     },
     Runner {
         id: "c16",
