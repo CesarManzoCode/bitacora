@@ -34,7 +34,7 @@ vault/                     CONTRACT.md, RESEARCH.md (y adr/ solo si hace falta)
 
 - Módulos de `crates/bitacora/src/`: `lib.rs`, `error.rs`, `medium.rs`, `format.rs`, `index.rs`, `volume.rs`, `gc.rs`, `snapshot.rs`, `backup.rs`, `wire.rs`, `server.rs`, `client.rs`, `replica.rs`, `migrate.rs`, `status.rs`, `capacity.rs`, `frontend.rs`, `ublk.rs` (solo con la feature `ublk`), `main.rs` (CLI). Un mini sprint puede partir un módulo en submódulos, no fusionar ni renombrar los de arriba.
 - Las pruebas del motor van en `crates/bitacora/tests/*.rs` y usan la API pública; por eso los módulos son `pub`. Así el conteo de C26 separa motor de verificación por ruta.
-- Dependencias permitidas, con versión exacta (`=x.y.z`) en `Cargo.toml`: `crc32c =0.6.8`, `libc =0.2.191`, `serde =1.0.229` (feature `derive`), `serde_json =1.0.154`, `sha2 =0.11.1` (solo en `bitacora-verify`), `libublk =0.4.8` (opcional, feature `ublk` de `bitacora`). Ninguna otra sin un ADR. El CLI se escribe sin crates de parseo de argumentos.
+- Dependencias permitidas, con versión exacta (`=x.y.z`) en `Cargo.toml`: `crc32c =0.6.8`, `libc =0.2.191`, `serde =1.0.229` (feature `derive`), `serde_json =1.0.154`, `sha2 =0.11.1` (solo en `bitacora-verify`), `libublk =0.4.8` (opcional, feature `ublk`, solo en `bitacora`), y `bitacora` por ruta en `bitacora-verify`. Valen para `[dependencies]` y `[dev-dependencies]`. Ninguna otra sin un ADR. El CLI se escribe sin crates de parseo de argumentos.
 
 ## 3. Formato en disco (`bitacora-volume/1`)
 
@@ -145,9 +145,9 @@ No hay checkpoints del índice en la versión 1: la recuperación recorre los re
 
 ## 12. Criterios de aceptación y su forma mecánica
 
-Todos los corredores son subcomandos de `target/release/bitacora-verify <cNN> [--seed N]`. Cada uno escribe su salida estándar también en `target/criteria/<cNN>/stdout.log`, deja ahí sus artefactos y sale con 0 solo si su criterio se cumple. Las líneas entre comillas son exactas (en español, tal como las fija la idea); puede haber más líneas. `bitacora-verify all` corre c01–c22 (c19 y c20 a través de los scripts), c24, c25 y c26, escribe `target/criteria/report.txt` con una línea `cNN: PASS|FAIL|OMITIDO <razón>` por criterio y sale con 0 si ninguno falló; 77 cuenta como OMITIDO. `make criteria` = compilar en release + `bitacora-verify all` (es el comando de C23).
+Todos los corredores son subcomandos de `target/release/bitacora-verify <cNN> [--seed N]`. Cada uno escribe su salida estándar también en `target/criteria/<cNN>/stdout.log`, deja ahí sus artefactos (en el disco del repositorio, nunca en `/tmp`, que en esta máquina es tmpfs y no admite `O_DIRECT`) y sale con 0 solo si su criterio se cumple. Las líneas entre comillas son exactas (en español, tal como las fija la idea); puede haber más líneas. `bitacora-verify all` corre c01–c22 (c19 y c20 a través de los scripts), c24, c25 y c26, escribe `target/criteria/report.txt` con una línea `cNN: PASS|FAIL|OMITIDO <razón>` por criterio y sale con 0 si ninguno falló; 77 cuenta como OMITIDO. `make criteria` = compilar en release + `bitacora-verify all` (es el comando de C23).
 
-Datos: el contenido de cada escritura es `f(semilla, lba, versión)` con el PRNG de `bitacora-verify` (SplitMix64 para sembrar, xoshiro256** para generar); el modelo guarda la versión por bloque. Una falla imprime `falla reproducible: semilla <n>` y la misma semilla reproduce la misma salida byte a byte.
+Datos: el contenido de cada escritura es `f(semilla, lba, versión)` con el PRNG de `bitacora-verify` (SplitMix64 para sembrar, xoshiro256** para generar); el modelo guarda la versión por bloque. Una falla imprime `falla reproducible: semilla <n>` y la misma semilla reproduce la misma salida byte a byte; por eso un corredor de semillas no imprime tiempos en su salida estándar. `<n>` e `<i>` cuentan desde 1.
 
 | Id | Corredor y parámetros | Salida y artefactos exactos |
 | --- | --- | --- |
@@ -271,6 +271,10 @@ Razón: así la evidencia sale de las salidas crudas que el checker ya leyó y n
 **Resultados medidos versionados.**
 Decisión: `results/c06.json` y `results/c21.json` se escriben al correr los corredores y se versionan con el commit de cierre del K.
 Razón: la restricción pide que toda cifra publicada salga de una corrida registrada con máquina y comando.
+
+**Licencia.**
+Decisión: MIT, en `LICENSE`.
+Razón: el proyecto es una pieza abierta, y MIT es compatible con todas las dependencias permitidas (MIT, Apache-2.0 o ambas).
 
 ## 16. Contradicciones resueltas
 

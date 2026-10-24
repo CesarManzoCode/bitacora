@@ -8,7 +8,7 @@ Es la versión ejecutable y abierta de la tarea de entrevista «Design a Storage
 
 | Fase | Contenido | Criterios | Estado |
 | --- | --- | --- | --- |
-| K0 | Fundación: contrato, investigación, plan | — | cerrada |
+| K0 | Fundación: contrato, investigación, plan | — | lista |
 | K1 | Volumen durable: log, índice, recuperación, checksums, GC, disco simulado | C1–C10 | pendiente |
 | K2 | Snapshots, backups, servidor, migración en vivo, réplica, estado | C11–C18, C25 | pendiente |
 | K3 | ublk, rendimiento, capacidad, documento de requisitos, clon limpio | C19–C24, C26 | pendiente |

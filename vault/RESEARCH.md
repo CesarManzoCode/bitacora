@@ -11,6 +11,7 @@ Comandos ejecutados en la máquina de César durante K0, como usuario normal (ui
 | Kernel | 7.2.11-arch1-1 | `uname -r` |
 | CPU y RAM | AMD Ryzen 5 5600G, 12 hilos; 14 GiB total, 12 GiB disponibles; 3 GiB de swap | `nproc`, `free -g`, `/proc/cpuinfo` |
 | Disco del repositorio | ADATA SU630 (SATA SSD), btrfs, 380 GB libres | `lsblk`, `findmnt`, `df -h` |
+| `/tmp` | tmpfs de 7.5 GiB | `df -h /tmp` |
 | ublk | `CONFIG_BLK_DEV_UBLK=m`; `ublk_drv.ko.zst` existe; no está cargado; no existe `/dev/ublk-control` | `zcat /proc/config.gz`, `modinfo ublk_drv`, `lsmod`, `ls /dev/ublk-control` |
 | root | `sudo -n true` → «a password is required» | `sudo -n true` |
 | io_uring sin root | `io_uring_setup` (syscall 425) devolvió el descriptor 3; `kernel.io_uring_disabled = 0` | script Python con ctypes; `/proc/sys/kernel/io_uring_disabled` |
