@@ -14,6 +14,7 @@ pub mod c09;
 pub mod c10;
 pub mod c11;
 pub mod c12;
+pub mod c13;
 
 use std::error::Error;
 use std::fmt::Display;
@@ -114,6 +115,11 @@ pub const RUNNERS: &[Runner] = &[
         id: "c12",
         default_seed: 1,
         run: c12::run,
+    },
+    Runner {
+        id: "c13",
+        default_seed: 1,
+        run: c13::run,
     },
 ];
 

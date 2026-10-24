@@ -8,6 +8,10 @@
 - El GC libera solo los registros sin referencias; al borrar un snapshot, el espacio que solo él retenía vuelve a ser reclamable por `compact()` y por el GC.
 - CLI: `bitacora snapshot create|delete ID|list --volume F` y `bitacora export --volume F [--snapshot ID] --out IMG`.
 - `bitacora-verify`: corredores c11 y c12.
+- Backups `bitacora-backup/1`: `Volume::backup_full(snapshot, out)` guarda todos los bloques escritos de un snapshot; `Volume::backup_incremental(base, destino, out)` guarda los LBA cuyo `birth` difiere entre dos snapshots y salta sin leerlas las páginas del índice que comparten por puntero. El backup lee del snapshot mientras el volumen sigue recibiendo escrituras de otros hilos.
+- `backup::restore(backups, medio, config)` comprueba primero cada archivo (CRC de cada entrada y del pie, orden de los LBA, `volume_id`, `volume_size` y la cadena `base_lsn` → `target_lsn`) y solo entonces escribe el volumen nuevo.
+- CLI: `bitacora backup full|incremental --volume F [--base ID] [--snapshot ID] --out BKP` y `bitacora restore --out F BKP...`.
+- `bitacora-verify`: corredor c13.
 
 ### K1 — Volumen durable (2026-10-24)
 

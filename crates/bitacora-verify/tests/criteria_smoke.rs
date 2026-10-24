@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use bitacora::medium::{FileMedium, Medium};
 use bitacora_verify::criteria::c06::CountingMedium;
-use bitacora_verify::criteria::{c05, c09, c10};
+use bitacora_verify::criteria::{c05, c09, c10, c13};
 
 fn test_dir(name: &str) -> PathBuf {
     let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
@@ -93,4 +93,20 @@ fn counting_medium_adds_exactly_the_bytes_written() {
     assert_eq!(medium.written(), 0);
     medium.write_at(&[9; 4096], 0).unwrap();
     assert_eq!(medium.written(), 4096);
+}
+
+#[test]
+fn reduced_c13_restores_the_incremental_snapshot() {
+    let p = c13::Params {
+        volume_size: 4 << 20,
+        segment_size: 256 << 10,
+        before: 600,
+        changed: 200,
+        flush_every: 32,
+    };
+    let r = c13::exercise(&test_dir("c13"), 1, &p).unwrap();
+    assert!(r.identical());
+    assert!(r.size_ok());
+    assert_eq!(r.entries, r.modified);
+    assert!(r.concurrent_writes > 0);
 }

@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
 
+use bitacora::backup;
 use bitacora::medium::FileMedium;
 use bitacora::{GcMode, Version, Volume, VolumeConfig};
 
@@ -15,6 +16,9 @@ usage: bitacora <command> [options]
 commands:
   snapshot   create|delete ID|list --volume F
   export     --volume F [--snapshot ID] --out IMG
+  backup     full --volume F [--snapshot ID] --out BKP
+             incremental --volume F --base ID [--snapshot ID] --out BKP
+  restore    --out F BKP...
   serve      serve a volume over a Unix socket
   status     print the status of a served volume
   replica    run a replica process
@@ -58,6 +62,8 @@ fn run(args: &[String]) -> Result<(), CliError> {
     match command.as_str() {
         "snapshot" => snapshot(rest),
         "export" => export(rest),
+        "backup" => backup(rest),
+        "restore" => restore(rest),
         "help" | "--help" | "-h" => {
             println!("{USAGE}");
             Ok(())
@@ -164,6 +170,60 @@ fn export(args: &[String]) -> Result<(), CliError> {
     };
     let vol = open_volume(path)?;
     vol.export(version, &out)?;
+    vol.close()?;
+    Ok(())
+}
+
+/// `backup full|incremental`. Without `--snapshot`, a snapshot is taken at
+/// the start and its id printed, so the next incremental can use it as base.
+fn backup(args: &[String]) -> Result<(), CliError> {
+    let opts = Options::parse(args, &["volume", "snapshot", "base", "out"])?;
+    let [kind] = opts.positional.as_slice() else {
+        return Err(CliError::Usage("backup needs full or incremental".into()));
+    };
+    let base = match (kind.as_str(), opts.get("base")) {
+        ("full", None) => None,
+        ("incremental", Some(id)) => Some(parse_id(id)?),
+        ("full", Some(_)) => return Err(CliError::Usage("backup full takes no --base".into())),
+        ("incremental", None) => return Err(CliError::Usage("missing --base".into())),
+        (other, _) => return Err(CliError::Usage(format!("unknown backup kind: {other}"))),
+    };
+    let path = opts.require("volume")?;
+    let out = PathBuf::from(opts.require("out")?);
+    let snapshot = opts.get("snapshot").map(parse_id).transpose()?;
+    let vol = open_volume(path)?;
+    let target = match snapshot {
+        Some(id) => id,
+        None => {
+            let id = vol.snapshot_create()?;
+            println!("{id}");
+            id
+        }
+    };
+    match base {
+        None => vol.backup_full(target, &out)?,
+        Some(base) => vol.backup_incremental(base, target, &out)?,
+    };
+    vol.close()?;
+    Ok(())
+}
+
+/// `restore --out F BKP...`: a new volume at F from a full backup and its
+/// incrementals, in order.
+fn restore(args: &[String]) -> Result<(), CliError> {
+    let opts = Options::parse(args, &["out"])?;
+    if opts.positional.is_empty() {
+        return Err(CliError::Usage("restore needs at least one backup".into()));
+    }
+    let out = PathBuf::from(opts.require("out")?);
+    if out.exists() {
+        return Err(CliError::Failed(format!("{} already exists", out.display())));
+    }
+    let head = backup::verify(&PathBuf::from(&opts.positional[0]))?;
+    // The GC stays on: the incrementals overwrite blocks of the full backup.
+    let config = VolumeConfig::new(head.volume_size);
+    let medium = Arc::new(FileMedium::create(&out, false)?);
+    let vol = backup::restore(&opts.positional, medium, config)?;
     vol.close()?;
     Ok(())
 }
