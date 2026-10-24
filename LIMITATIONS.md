@@ -1,0 +1,27 @@
+# Límites
+
+Fuente única de lo que bitacora no demuestra. Ningún otro archivo los repite.
+
+## Alcance
+
+- No describe ni reproduce el motor interno de Railway: no hay documento público de su diseño. La única cifra de Railway usada es la referencia publicada de 3,000 IOPS de lectura y 3,000 de escritura por volumen.
+- Todo corre en una sola máquina. La replicación se demuestra entre procesos del mismo host: una caída es `SIGKILL` y una partición es `SIGSTOP`/`SIGCONT`. No se demuestra comportamiento de red real (latencia, pérdida o reordenamiento de paquetes).
+- Un corte de energía se aproxima con un disco simulado que descarta escrituras no sincronizadas y con `SIGKILL`. No cubre la caché interna de un SSD real.
+- SPDK, vhost-user-blk y la especificación de hardware de servidores quedan fuera: requieren hardware, hugepages, VFIO o root.
+- No hay comparación medida contra dm-thin, ZFS u otro sistema: requieren root en esta máquina y la comparación solo vale en la misma máquina.
+- No se usan dm-flakey, dm-log-writes ni loop devices.
+
+## Diseño
+
+- Atomicidad garantizada por bloque de 4 KiB, no por petición de varios bloques.
+- Sin checkpoints del índice: el tiempo de apertura crece con el tamaño físico del volumen.
+- Sin TRIM/DISCARD ni WRITE_ZEROES.
+- Si un bloque del último lote escrito antes de un corte (sin cierre ordenado) se corrompe, no se distingue de una escritura rota y se trata como no escrito.
+- Los snapshots son locales a cada proceso: no se replican ni se migran.
+- El volumen corre sobre un archivo en btrfs en la máquina de medición; el copy-on-write del sistema de archivos de abajo añade su propia amplificación, que no se descuenta.
+
+## Verificación
+
+- C19 y C20 (ublk) se omiten con código 77 cuando falta root, el módulo `ublk_drv` o el permiso; una omisión no es un aprobado.
+- Los umbrales de C4, C6, C12, C15, C22 y C25 se fijaron en K0 con la cota del diseño y la medición de la plataforma, antes de existir el motor, no con una corrida previa del motor.
+- C24 comprueba solo que el documento de requisitos y sus encabezados existen; si su contenido es correcto es un juicio humano.

@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "bitacora status",
+  "type": "object",
+  "required": ["format", "volume", "replicas", "gc", "space"],
+  "additionalProperties": false,
+  "properties": {
+    "format": {"type": "string", "enum": ["bitacora-status/1"]},
+    "volume": {
+      "type": "object",
+      "required": ["volume_id", "volume_size", "state", "epoch", "last_lsn", "durable_lsn", "snapshots"],
+      "additionalProperties": false,
+      "properties": {
+        "volume_id": {"type": "string"},
+        "volume_size": {"type": "integer", "minimum": 0},
+        "state": {"type": "string", "enum": ["ok", "failed", "frozen", "moved"]},
+        "epoch": {"type": "integer", "minimum": 0},
+        "last_lsn": {"type": "integer", "minimum": 0},
+        "durable_lsn": {"type": "integer", "minimum": 0},
+        "snapshots": {"type": "integer", "minimum": 0}
+      }
+    },
+    "replicas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "role", "state", "epoch", "last_lsn", "last_heartbeat_ms"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "integer", "minimum": 0},
+          "role": {"type": "string", "enum": ["primary", "follower", "standalone"]},
+          "state": {"type": "string", "enum": ["activa", "atrasada", "caida"]},
+          "epoch": {"type": "integer", "minimum": 0},
+          "last_lsn": {"type": "integer", "minimum": 0},
+          "last_heartbeat_ms": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "gc": {
+      "type": "object",
+      "required": ["mode", "running", "segments_cleaned", "bytes_relocated"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": {"type": "string", "enum": ["auto", "continuous", "off"]},
+        "running": {"type": "boolean"},
+        "segments_cleaned": {"type": "integer", "minimum": 0},
+        "bytes_relocated": {"type": "integer", "minimum": 0}
+      }
+    },
+    "space": {
+      "type": "object",
+      "required": ["segment_size", "max_segments", "used_segments", "free_segments", "live_bytes", "physical_bytes"],
+      "additionalProperties": false,
+      "properties": {
+        "segment_size": {"type": "integer", "minimum": 0},
+        "max_segments": {"type": "integer", "minimum": 0},
+        "used_segments": {"type": "integer", "minimum": 0},
+        "free_segments": {"type": "integer", "minimum": 0},
+        "live_bytes": {"type": "integer", "minimum": 0},
+        "physical_bytes": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "format": "bitacora-thresholds/1",
+  "fixed_at": "2026-10-24, K0, before any engine code existed",
+  "platform_measurement": {
+    "machine": "AMD Ryzen 5 5600G, 14 GiB RAM, ADATA SU630 SATA SSD, btrfs, Linux 7.2.11-arch1-1",
+    "write_4k_plus_fdatasync_ms": {"p50": 1.051, "p99": 1.445, "max": 1.582},
+    "odirect_4k_random_read_qd1": {"iops": 8687, "p50_ms": 0.114, "p99_ms": 0.147},
+    "sequential_write_with_fdatasync_mib_s": 420
+  },
+  "c04_max_physical_factor": {
+    "value": 1.30,
+    "reason": "design cap: max_segments = ceil(1.25 x volume / segment) + 4 segments; for 1 GiB and 8 MiB segments the file can reach 1.25 + 32 MiB/1 GiB + 1 MiB prefix = 1.282 x volume"
+  },
+  "c06_max_write_amplification": {
+    "caliente_fria": {
+      "value": 2.5,
+      "reason": "greedy bound for 25 % spare is (1 + 0.25) / (2 x 0.25) = 2.5 for uniform traffic (Desnoyers 2012); hot/cold separation must stay at or below the uniform greedy bound"
+    },
+    "uniforme": {
+      "value": 3.5,
+      "reason": "greedy bound 2.5 plus summary blocks (1/128), segment headers and cost-benefit victim choice; 1.0 of margin"
+    }
+  },
+  "c12_max_allocated_over_justified": {
+    "value": 1.15,
+    "reason": "after compact() only the open hot and cold segments may hold dead or empty blocks; 15 % covers summary blocks and partially filled segments"
+  },
+  "c12_slack_bytes": {
+    "value": 33554432,
+    "reason": "4 segments of 8 MiB: open hot, open cold, file prefix and one segment of rounding"
+  },
+  "c15_max_pause_ms": {
+    "value": 250,
+    "reason": "final delta below 1024 blocks = 4 MiB, about 10 ms at the measured 420 MiB/s, plus one fdatasync (max 1.6 ms measured) and a socket reconnect; 250 ms is a 10x margin over that bound"
+  },
+  "c22_max_relative_error": {
+    "value": 0.15,
+    "reason": "the projection uses the same space and GC rules as the engine; 15 % covers segment rounding and GC trigger timing over 30 simulated days"
+  },
+  "c25_max_detection_ms": {
+    "value": 1500,
+    "reason": "heartbeat every 100 ms and failure timeout 500 ms (contract section 9), plus status polling every 50 ms and process scheduling; 3x the timeout"
+  }
+}
