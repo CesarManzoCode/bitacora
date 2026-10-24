@@ -27,6 +27,9 @@ Fuente única de lo que bitacora no demuestra. Ningún otro archivo los repite.
 - El volumen corre sobre un archivo en btrfs en la máquina de medición; el copy-on-write del sistema de archivos de abajo añade su propia amplificación, que no se descuenta.
 - Un segmento con un bloque vivo que no pasa su `data_crc` se marca dañado y el GC no lo reclama: su espacio no vuelve al volumen.
 - Los contadores del GC de `status()` no se guardan en disco y vuelven a cero al reabrir el volumen.
+- El servidor atiende las peticiones de cada conexión una a una: un cliente no tiene más de una petición en curso por conexión. La concurrencia sale de abrir varias conexiones.
+- `EXPORT` por el socket escribe la imagen en el sistema de archivos del servidor, en la ruta que manda el cliente; el servidor no restringe esa ruta, así que el socket solo debe ser accesible para usuarios de confianza.
+- Una petición con época 0 no se compara con la del volumen; solo se responde `FENCED` a una época distinta de 0 y menor que la del volumen.
 
 ## Verificación
 

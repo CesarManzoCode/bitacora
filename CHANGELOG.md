@@ -12,6 +12,10 @@
 - `backup::restore(backups, medio, config)` comprueba primero cada archivo (CRC de cada entrada y del pie, orden de los LBA, `volume_id`, `volume_size` y la cadena `base_lsn` → `target_lsn`) y solo entonces escribe el volumen nuevo.
 - CLI: `bitacora backup full|incremental --volume F [--base ID] [--snapshot ID] --out BKP` y `bitacora restore --out F BKP...`.
 - `bitacora-verify`: corredor c13.
+- Protocolo por socket Unix (`wire.rs`): tramas de longitud `u32` con los códigos de op y de status de la sección 8 del contrato. La decodificación rechaza sin pánico una trama truncada, demasiado grande, con bytes de sobra o con op o status desconocidos. Los códigos 16–31 quedan reservados para la replicación y los 32–47 para la migración.
+- Servidor (`server.rs`): `bitacora serve --volume F --socket S [--create SIZE]`, con un hilo por conexión y las respuestas de cada conexión en orden. Los errores del motor se responden así: `Io` e `InvalidArgument` → `IO_ERROR`; `Integrity` y `Corrupt` → `INTEGRITY_ERROR`; `NoSpace` → `NO_SPACE`; `Failed` y `Closed` → `FAILED`. Con `SIGTERM` o `SIGINT` deja de aceptar conexiones, termina las peticiones en curso, cierra el volumen y borra el socket.
+- Cliente (`client.rs`): `Client::connect(path)` con `read`, `write`, `write_fua`, `flush`, `status`, `snapshot_create`, `snapshot_delete` y `export`. Ante `MOVED` reconecta al socket destino y reenvía la petición.
+- Estado `bitacora-status/1` (`status.rs`) con exactamente las claves requeridas por `schemas/status.schema.json`. Un volumen sin réplicas lista una sola entrada `standalone` en `activa`. CLI: `bitacora status --socket S [--json]`.
 
 ### K1 — Volumen durable (2026-10-24)
 

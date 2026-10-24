@@ -4,16 +4,23 @@
 //! in their own sprints.
 
 pub mod backup;
+pub mod client;
 pub mod error;
 pub mod format;
 pub mod gc;
 pub mod index;
 pub mod medium;
+pub mod server;
 pub mod snapshot;
+pub mod status;
 pub mod volume;
+pub mod wire;
 
 pub use backup::BackupHeader;
+pub use client::{Client, ClientError};
 pub use error::{Error, Result};
 pub use gc::GcStatus;
+pub use server::{Server, ServerHandle};
 pub use snapshot::{SnapshotInfo, Version};
+pub use status::StatusReport;
 pub use volume::{GcMode, SegmentUsage, Volume, VolumeConfig, VolumeState, VolumeStatus};

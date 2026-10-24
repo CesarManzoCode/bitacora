@@ -7,7 +7,7 @@ use std::alloc::{self, Layout};
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::ops::{Deref, DerefMut};
-use std::os::unix::fs::{FileExt, OpenOptionsExt};
+use std::os::unix::fs::{FileExt, MetadataExt, OpenOptionsExt};
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use std::ptr::NonNull;
@@ -41,6 +41,12 @@ pub trait Medium: Send + Sync {
     /// Releases the space of `[offset, offset + len)` without changing the
     /// length; the range then reads as zeros.
     fn punch_hole(&self, offset: u64, len: u64) -> Result<()>;
+
+    /// Bytes the medium occupies on its backing store. Defaults to `len`
+    /// for media without holes.
+    fn allocated_bytes(&self) -> Result<u64> {
+        self.len()
+    }
 }
 
 /// Heap buffer aligned to `DIRECT_ALIGN`, zero-initialised.
@@ -199,6 +205,11 @@ impl Medium for FileMedium {
 
     fn len(&self) -> Result<u64> {
         Ok(self.file.metadata()?.len())
+    }
+
+    /// `st_blocks × 512`: punched holes do not count.
+    fn allocated_bytes(&self) -> Result<u64> {
+        Ok(self.file.metadata()?.blocks() * 512)
     }
 
     fn punch_hole(&self, offset: u64, len: u64) -> Result<()> {
