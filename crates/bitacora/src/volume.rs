@@ -518,11 +518,13 @@ impl Volume {
             core.geo.check_range(lba, nblocks)?;
             let index = match snapshot {
                 None => &inner.index,
-                Some(id) => &inner
-                    .snapshots
-                    .get(&id)
-                    .ok_or_else(|| Error::InvalidArgument(format!("no snapshot {id}")))?
-                    .index,
+                Some(id) => {
+                    &inner
+                        .snapshots
+                        .get(&id)
+                        .ok_or_else(|| Error::InvalidArgument(format!("no snapshot {id}")))?
+                        .index
+                }
             };
             for slot in 0..nblocks {
                 let birth = index.get(lba + slot);

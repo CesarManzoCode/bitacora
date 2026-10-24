@@ -438,7 +438,9 @@ pub fn handle_target(vol: &Volume, gate: &Gate, req: &Request) -> Result<Vec<u8>
             }
             let items: Vec<(u64, u64, &[u8])> = req
                 .payload
-                .chunks_exact(ENTRY)
+                .as_chunks::<ENTRY>()
+                .0
+                .iter()
                 .map(|e| (get_u64(e, 0), get_u64(e, 8), &e[16..]))
                 .collect();
             vol.apply_resync(&items)?;

@@ -92,7 +92,9 @@ impl Index {
             let Some(b) = theirs else {
                 continue;
             };
-            let equal = mine.as_ref().is_some_and(|a| !Arc::ptr_eq(a, b) && **a == **b);
+            let equal = mine
+                .as_ref()
+                .is_some_and(|a| !Arc::ptr_eq(a, b) && **a == **b);
             if equal {
                 *mine = Some(b.clone());
             }

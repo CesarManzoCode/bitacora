@@ -119,7 +119,10 @@ impl Volume {
         inner
             .snapshots
             .range(..PIN_BASE)
-            .map(|(id, f)| SnapshotInfo { id: *id, lsn: f.lsn })
+            .map(|(id, f)| SnapshotInfo {
+                id: *id,
+                lsn: f.lsn,
+            })
             .collect()
     }
 

@@ -142,9 +142,15 @@ impl Status {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WireError {
     /// Fewer bytes than the header or the declared length.
-    Truncated { needed: usize, got: usize },
+    Truncated {
+        needed: usize,
+        got: usize,
+    },
     /// More bytes than the declared length.
-    Trailing { expected: usize, got: usize },
+    Trailing {
+        expected: usize,
+        got: usize,
+    },
     /// Declared body length above `MAX_BODY`.
     TooLarge(usize),
     UnknownOp(u8),

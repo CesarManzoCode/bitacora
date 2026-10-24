@@ -206,7 +206,7 @@ impl Volume {
                 end += 1;
             }
             let data = self.read_snapshot(snapshot, lbas[start], (end - start) as u64)?;
-            for (k, block) in data.chunks_exact(BLOCK_SIZE).enumerate() {
+            for (k, block) in data.as_chunks::<BLOCK_SIZE>().0.iter().enumerate() {
                 let lba = lbas[start + k];
                 let mut meta = [0u8; 16];
                 meta[0..8].copy_from_slice(&lba.to_le_bytes());
@@ -242,7 +242,8 @@ fn for_each_entry(
     let len = file.metadata()?.len();
     let mut r = BufReader::with_capacity(1 << 20, file);
     let mut head = [0u8; HEADER_LEN];
-    r.read_exact(&mut head).map_err(|_| bad("truncated header".into()))?;
+    r.read_exact(&mut head)
+        .map_err(|_| bad("truncated header".into()))?;
     let header = BackupHeader::decode(&head)?;
     if header.volume_size == 0 || !header.volume_size.is_multiple_of(BLOCK_SIZE_U64) {
         return Err(bad(format!("invalid volume_size {}", header.volume_size)));
@@ -251,7 +252,10 @@ fn for_each_entry(
         return Err(bad("target_lsn is before base_lsn".into()));
     }
     if header.file_len() != Some(len) {
-        return Err(bad(format!("length {len} does not match {} entries", header.count)));
+        return Err(bad(format!(
+            "length {len} does not match {} entries",
+            header.count
+        )));
     }
     let blocks = header.volume_size / BLOCK_SIZE_U64;
     let mut crc = crc32c::crc32c(&head);
@@ -293,7 +297,9 @@ pub fn restore<P: AsRef<Path>>(
     config: VolumeConfig,
 ) -> Result<Volume> {
     let Some(first) = backups.first() else {
-        return Err(Error::InvalidArgument("restore needs at least one backup".into()));
+        return Err(Error::InvalidArgument(
+            "restore needs at least one backup".into(),
+        ));
     };
     let head = verify(first.as_ref())?;
     if !head.is_full() {

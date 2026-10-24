@@ -34,7 +34,10 @@ pub fn run(ctx: &mut Ctx) -> Outcome {
     if !cluster.converge(primary, &others(primary), CONVERGE_TIMEOUT)? {
         return Err("followers did not attach after the election".into());
     }
-    fs::write(ctx.dir.join("status-antes.json"), cluster.status_json(primary)?)?;
+    fs::write(
+        ctx.dir.join("status-antes.json"),
+        cluster.status_json(primary)?,
+    )?;
 
     let follower = others(primary)[Rng::stream(ctx.seed, 1).below(2) as usize];
     cluster.kill(follower)?;

@@ -250,7 +250,11 @@ pub fn plan_resync(
 /// `last_lsn`: entries that would start after it cover nothing and go,
 /// the new one is appended, and the oldest ones are dropped past 64 (an
 /// epoch missing from the history only forces a full resync).
-pub fn promoted_history(mut history: Vec<EpochEntry>, epoch: u64, last_lsn: u64) -> Vec<EpochEntry> {
+pub fn promoted_history(
+    mut history: Vec<EpochEntry>,
+    epoch: u64,
+    last_lsn: u64,
+) -> Vec<EpochEntry> {
     let start_lsn = last_lsn + 1;
     history.retain(|e| e.start_lsn < start_lsn && e.epoch < epoch);
     history.push(EpochEntry { epoch, start_lsn });
@@ -813,7 +817,10 @@ impl Node {
             return Response::error(
                 req.req_id,
                 Status::IoError,
-                &format!("epoch {} was not prepared on replica {}", req.epoch, self.id),
+                &format!(
+                    "epoch {} was not prepared on replica {}",
+                    req.epoch, self.id
+                ),
             );
         }
         self.abort_incoming(&mut st);
@@ -871,7 +878,9 @@ impl Node {
             RESYNC_BEGIN => self.resync_begin(&mut st, req),
             RESYNC_DATA => self.resync_data(&mut st, req),
             RESYNC_END => self.resync_end(&mut st, req),
-            phase => Err(Error::InvalidArgument(format!("unknown resync phase {phase}"))),
+            phase => Err(Error::InvalidArgument(format!(
+                "unknown resync phase {phase}"
+            ))),
         };
         if result.is_err() {
             self.abort_incoming(&mut st);
@@ -923,7 +932,9 @@ impl Node {
             let medium = Arc::new(FileMedium::create(&tmp, false)?);
             Some((Arc::new(Volume::create(medium, config)?), tmp))
         } else {
-            return Err(Error::InvalidArgument(format!("unknown resync mode {mode}")));
+            return Err(Error::InvalidArgument(format!(
+                "unknown resync mode {mode}"
+            )));
         };
         st.incoming = Some(Incoming {
             epoch: req.epoch,
@@ -956,7 +967,9 @@ impl Node {
         }
         let items: Vec<(u64, u64, &[u8])> = req
             .payload
-            .chunks_exact(RESYNC_ENTRY)
+            .as_chunks::<RESYNC_ENTRY>()
+            .0
+            .iter()
             .map(|c| (get_u64(c, 0), get_u64(c, 8), &c[16..]))
             .collect();
         vol.apply_resync(&items)?;
@@ -966,9 +979,16 @@ impl Node {
     fn resync_end(&self, st: &mut State, req: &Request) -> Result<Vec<u8>> {
         let vol = Node::incoming_volume(st, req.epoch)?;
         let inc = st.incoming.take().expect("incoming_volume found it");
-        if req.payload.first_chunk::<8>().map(|b| u64::from_le_bytes(*b)) != Some(inc.target) {
+        if req
+            .payload
+            .first_chunk::<8>()
+            .map(|b| u64::from_le_bytes(*b))
+            != Some(inc.target)
+        {
             st.incoming = Some(inc);
-            return Err(Error::InvalidArgument("resync end with another target".into()));
+            return Err(Error::InvalidArgument(
+                "resync end with another target".into(),
+            ));
         }
         let finished = vol
             .finish_resync(inc.target)
@@ -1175,7 +1195,7 @@ impl Handler for Node {
 
 /// Writes the entries of an `APPEND` in order and syncs them.
 fn apply_entries(vol: &Volume, payload: &[u8]) -> Result<()> {
-    for entry in payload.chunks_exact(APPEND_ENTRY) {
+    for entry in payload.as_chunks::<APPEND_ENTRY>().0 {
         vol.write(get_u64(entry, 0), &entry[8..])?;
     }
     vol.flush()
@@ -1419,7 +1439,12 @@ fn exchange(
 }
 
 /// Records the claim a follower answered.
-fn note_claim(node: &Node, slot: usize, epoch: u64, claim: &Claim) -> std::result::Result<(), Broken> {
+fn note_claim(
+    node: &Node,
+    slot: usize,
+    epoch: u64,
+    claim: &Claim,
+) -> std::result::Result<(), Broken> {
     let mut st = node.lock();
     let Some(p) = st.primary.as_mut().filter(|p| p.epoch == epoch) else {
         return Err(Broken::Gone);
@@ -1573,7 +1598,9 @@ fn send_resync(
     };
     exchange(node, conn, slot, epoch, frame(RESYNC_BEGIN, 0, begin))?;
 
-    let births = vol.pinned_births_after(pin, base).map_err(|_| Broken::Gone)?;
+    let births = vol
+        .pinned_births_after(pin, base)
+        .map_err(|_| Broken::Gone)?;
     for chunk in births.chunks(RESYNC_CHUNK_BLOCKS) {
         let mut payload = Vec::with_capacity(chunk.len() * RESYNC_ENTRY);
         // One read per run of consecutive LBAs.
@@ -1753,7 +1780,9 @@ fn remove_marker(path: &Path) -> Result<()> {
 /// the volume's own last LSN is then still consistent.
 fn read_marker(path: &Path, last_lsn: u64) -> Result<Option<u64>> {
     match fs::read_to_string(path) {
-        Ok(text) => Ok(Some(text.trim().parse::<u64>().unwrap_or(last_lsn).min(last_lsn))),
+        Ok(text) => Ok(Some(
+            text.trim().parse::<u64>().unwrap_or(last_lsn).min(last_lsn),
+        )),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(Error::Io(e)),
     }

@@ -229,10 +229,7 @@ fn a_new_primary_has_every_acknowledged_write() {
     // The history of the new primary starts its epoch after what it held.
     let history = vol.epoch_history();
     assert_eq!(history.last().unwrap().epoch, second.epoch);
-    assert_eq!(
-        history.last().unwrap().start_lsn,
-        second.claim.last_lsn + 1
-    );
+    assert_eq!(history.last().unwrap().start_lsn, second.claim.last_lsn + 1);
     cluster.stop();
 }
 
@@ -266,7 +263,8 @@ fn an_append_of_an_old_epoch_is_fenced() {
             nblocks: 1,
             payload,
         };
-        let mut conn = replica::PeerConn::open(&cluster.socket(id), Duration::from_secs(5)).unwrap();
+        let mut conn =
+            replica::PeerConn::open(&cluster.socket(id), Duration::from_secs(5)).unwrap();
         let resp = conn.call(req).unwrap();
         assert_eq!(resp.status, Status::Fenced, "replica {id}");
         let mut beat = Request::new(Op::Heartbeat, 0);
@@ -317,7 +315,11 @@ fn a_restarted_replica_converges_to_the_same_contents() {
         .iter()
         .map(|id| {
             let path = cluster.dir.join(format!("r{id}.export"));
-            cluster.get(*id).volume().export(Version::Live, &path).unwrap();
+            cluster
+                .get(*id)
+                .volume()
+                .export(Version::Live, &path)
+                .unwrap();
             fs::read(&path).unwrap()
         })
         .collect();
@@ -378,7 +380,12 @@ fn the_rejoin_rule_picks_delta_only_for_a_prefix() {
     // Promoted at LSN 10 in epoch 4: the entry of epoch 3 covered nothing.
     let promoted = replica::promoted_history(h.clone(), 4, 10);
     assert_eq!(promoted, history(&[(1, 1), (4, 11)]));
-    let long: Vec<EpochEntry> = (1..=64).map(|e| EpochEntry { epoch: e, start_lsn: e }).collect();
+    let long: Vec<EpochEntry> = (1..=64)
+        .map(|e| EpochEntry {
+            epoch: e,
+            start_lsn: e,
+        })
+        .collect();
     let capped = replica::promoted_history(long, 65, 100);
     assert_eq!(capped.len(), 64);
     assert_eq!(capped.last().unwrap().epoch, 65);

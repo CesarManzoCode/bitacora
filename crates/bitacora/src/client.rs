@@ -160,7 +160,9 @@ impl Client {
                 Err(e) => last = Some(e),
             }
         }
-        Err(ClientError::Io(last.expect("at least one replica was tried")))
+        Err(ClientError::Io(
+            last.expect("at least one replica was tried"),
+        ))
     }
 
     /// Socket currently connected.
@@ -213,8 +215,7 @@ impl Client {
     /// The status exactly as the server sent it.
     pub fn status_json(&mut self) -> ClientResult<String> {
         let payload = self.call(Op::Status, 0, 0, Vec::new())?;
-        String::from_utf8(payload)
-            .map_err(|_| ClientError::Protocol("status is not UTF-8".into()))
+        String::from_utf8(payload).map_err(|_| ClientError::Protocol("status is not UTF-8".into()))
     }
 
     pub fn snapshot_create(&mut self) -> ClientResult<u64> {

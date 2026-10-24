@@ -115,7 +115,9 @@ fn full_and_two_incrementals_restore_the_exact_image() {
     // The raw exports match byte for byte too.
     let a = dir.join("snapshot.raw");
     let b = dir.join("restored.raw");
-    c.vol.export(Version::Snapshot(c.last_snapshot), &a).unwrap();
+    c.vol
+        .export(Version::Snapshot(c.last_snapshot), &a)
+        .unwrap();
     restored.export(Version::Live, &b).unwrap();
     assert!(fs::read(&a).unwrap() == fs::read(&b).unwrap());
 

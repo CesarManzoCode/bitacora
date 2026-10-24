@@ -121,7 +121,14 @@ pub fn exercise(dir: &Path, seed: u64, p: &Params) -> Result<Report, Box<dyn Err
     let incr_bkp = dir.join("incremental.bkp");
     let snap_img = dir.join("snapshot.img");
     let restored_img = dir.join("restaurado.img");
-    for f in [&path, &restored_path, &full_bkp, &incr_bkp, &snap_img, &restored_img] {
+    for f in [
+        &path,
+        &restored_path,
+        &full_bkp,
+        &incr_bkp,
+        &snap_img,
+        &restored_img,
+    ] {
         let _ = fs::remove_file(f);
     }
     let config = VolumeConfig::new(p.volume_size)
@@ -151,8 +158,7 @@ pub fn exercise(dir: &Path, seed: u64, p: &Params) -> Result<Report, Box<dyn Err
         let (tx, rx) = mpsc::channel();
         let mut wrng = Rng::stream(seed, 1);
         let (vol, stop, model) = (&vol, &stop, &mut model);
-        let handle =
-            s.spawn(move || writer(vol, model, &mut wrng, p.flush_every, stop, tx));
+        let handle = s.spawn(move || writer(vol, model, &mut wrng, p.flush_every, stop, tx));
         let header: Result<_, Box<dyn Error>> = match rx.recv() {
             Ok(()) => vol
                 .backup_incremental(base, target, &incr_bkp)
@@ -160,7 +166,9 @@ pub fn exercise(dir: &Path, seed: u64, p: &Params) -> Result<Report, Box<dyn Err
             Err(_) => Err("the concurrent writer stopped before its first write".into()),
         };
         stop.store(true, Ordering::Release);
-        let writes = handle.join().map_err(|_| "the concurrent writer panicked")?;
+        let writes = handle
+            .join()
+            .map_err(|_| "the concurrent writer panicked")?;
         Ok::<_, Box<dyn Error>>((header?, writes?))
     })?;
 

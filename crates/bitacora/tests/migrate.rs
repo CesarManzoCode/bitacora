@@ -14,7 +14,12 @@ use bitacora::wire::{self, Op, Request, Status};
 use bitacora::{Client, Server, ServerHandle, Volume, VolumeConfig};
 
 const SEGMENT: u64 = 256 << 10;
-const VOLUME: u64 = 16 << 20;
+/// The 64 MiB of C14. While a migration runs, its pin keeps every pinned
+/// version, so the source only has the space rule's headroom (a quarter of
+/// the volume) for the writes that go on; with 16 MiB an unpaced writer
+/// filled it before the copy ended and got `NO_SPACE`, as the contract
+/// says it must.
+const VOLUME: u64 = 64 << 20;
 const BLOCKS: u64 = VOLUME / BLOCK_SIZE as u64;
 
 fn temp_dir(name: &str) -> PathBuf {

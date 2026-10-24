@@ -56,7 +56,12 @@ pub fn justified_bytes(versions: &[&Model]) -> u64 {
     let mut pairs = 0u64;
     for lba in 0..first.blocks() as usize {
         seen.clear();
-        seen.extend(versions.iter().map(|m| m.versions()[lba]).filter(|&v| v > 0));
+        seen.extend(
+            versions
+                .iter()
+                .map(|m| m.versions()[lba])
+                .filter(|&v| v > 0),
+        );
         seen.sort_unstable();
         seen.dedup();
         pairs += seen.len() as u64;
@@ -124,7 +129,10 @@ pub fn run(ctx: &mut Ctx) -> Outcome {
     let slack = threshold(&["c12_slack_bytes"])?;
     let r = exercise(&ctx.dir.join("volume.img"), ctx.seed, &FULL)?;
     let limit = r.justified_bytes as f64 * ratio + slack;
-    ctx.line(format!("hashes_snapshots_intactos: {} de {}", r.intact, r.remaining));
+    ctx.line(format!(
+        "hashes_snapshots_intactos: {} de {}",
+        r.intact, r.remaining
+    ));
     ctx.line(format!("bytes_justificados: {}", r.justified_bytes));
     ctx.line(format!("bytes_asignados: {}", r.allocated_bytes));
     Ok(Verdict::from_pass(

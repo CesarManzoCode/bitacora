@@ -309,11 +309,7 @@ fn clear_stop(medium: &dyn Medium, geo: &Geometry, len: u64, seg: &ScannedSegmen
 /// Point 5: the live index takes the greatest `birth` of each LBA and each
 /// snapshot the greatest `birth` ≤ its LSN. A birth found twice (an original
 /// and its relocation) keeps the newest location.
-fn rebuild(
-    geo: &Geometry,
-    segs: &[ScannedSegment],
-    snapshots: &[(u64, u64)],
-) -> Result<Recovered> {
+fn rebuild(geo: &Geometry, segs: &[ScannedSegment], snapshots: &[(u64, u64)]) -> Result<Recovered> {
     let mut found = Vec::new();
     let mut segments = vec![None; geo.max_segments as usize];
     let mut last_lsn = 0;

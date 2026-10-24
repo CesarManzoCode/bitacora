@@ -8,8 +8,8 @@ use std::sync::Arc;
 
 use bitacora::backup;
 use bitacora::medium::FileMedium;
-use bitacora::{migrate, replica, server};
 use bitacora::{Client, GcMode, Replica, ReplicaConfig, Server, Version, Volume, VolumeConfig};
+use bitacora::{migrate, replica, server};
 
 const USAGE: &str = "\
 usage: bitacora <command> [options]
@@ -141,7 +141,9 @@ fn snapshot(args: &[String]) -> Result<(), CliError> {
         .ok_or_else(|| CliError::Usage("snapshot needs create, delete or list".into()))?;
     let expected = usize::from(action == "delete");
     if rest.len() != expected {
-        return Err(CliError::Usage(format!("snapshot {action}: unexpected arguments")));
+        return Err(CliError::Usage(format!(
+            "snapshot {action}: unexpected arguments"
+        )));
     }
     let path = opts.require("volume")?;
     let vol = match action.as_str() {
@@ -224,7 +226,10 @@ fn restore(args: &[String]) -> Result<(), CliError> {
     }
     let out = PathBuf::from(opts.require("out")?);
     if out.exists() {
-        return Err(CliError::Failed(format!("{} already exists", out.display())));
+        return Err(CliError::Failed(format!(
+            "{} already exists",
+            out.display()
+        )));
     }
     let head = backup::verify(&PathBuf::from(&opts.positional[0]))?;
     // The GC stays on: the incrementals overwrite blocks of the full backup.
@@ -273,7 +278,9 @@ fn serve(args: &[String]) -> Result<(), CliError> {
     let create = opts.get("create").map(parse_size).transpose()?;
     // Before any thread exists, so that only the signal thread gets them.
     server::block_signals().map_err(|e| CliError::Failed(e.to_string()))?;
-    let empty = std::fs::metadata(&path).map(|m| m.len() == 0).unwrap_or(true);
+    let empty = std::fs::metadata(&path)
+        .map(|m| m.len() == 0)
+        .unwrap_or(true);
     let vol = match create {
         Some(size) if empty => {
             let medium = Arc::new(FileMedium::create(&path, false)?);
@@ -329,7 +336,10 @@ fn status(args: &[String]) -> Result<(), CliError> {
     } else {
         let v = &report.volume;
         println!("volume {} state {:?}", v.volume_id, v.state);
-        println!("size {} epoch {} snapshots {}", v.volume_size, v.epoch, v.snapshots);
+        println!(
+            "size {} epoch {} snapshots {}",
+            v.volume_size, v.epoch, v.snapshots
+        );
         println!("last_lsn {} durable_lsn {}", v.last_lsn, v.durable_lsn);
         let s = &report.space;
         println!(

@@ -68,7 +68,7 @@ impl Trial {
 }
 
 pub fn trial(dir: &Path, seed: u64, p: &Params) -> Result<Trial, Box<dyn Error>> {
-    let mut cluster = Cluster::start(dir, p.volume_size, p.segment_size)?;
+    let cluster = Cluster::start(dir, p.volume_size, p.segment_size)?;
     let (old, old_epoch) = cluster.elect()?;
     if !cluster.converge(old, &others(old), CONVERGE_TIMEOUT)? {
         return Err("followers did not attach after the first election".into());

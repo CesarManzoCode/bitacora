@@ -97,7 +97,10 @@ fn truncated_frames_are_rejected() {
     let frame = req.encode();
     for cut in 0..frame.len() {
         let err = Request::decode_frame(&frame[..cut]).unwrap_err();
-        assert!(matches!(err, WireError::Truncated { .. }), "cut {cut}: {err:?}");
+        assert!(
+            matches!(err, WireError::Truncated { .. }),
+            "cut {cut}: {err:?}"
+        );
     }
     for cut in 1..frame.len() {
         let mut reader = &frame[..cut];
@@ -121,13 +124,19 @@ fn truncated_frames_are_rejected() {
 fn unknown_or_oversized_frames_are_rejected() {
     let mut frame = Request::new(Op::Flush, 1).encode();
     frame[4] = 200;
-    assert_eq!(Request::decode_frame(&frame), Err(WireError::UnknownOp(200)));
+    assert_eq!(
+        Request::decode_frame(&frame),
+        Err(WireError::UnknownOp(200))
+    );
     frame[4] = 0;
     assert_eq!(Request::decode_frame(&frame), Err(WireError::UnknownOp(0)));
 
     let mut resp = Response::ok(1, Vec::new()).encode();
     resp[12] = 99;
-    assert_eq!(Response::decode_frame(&resp), Err(WireError::UnknownStatus(99)));
+    assert_eq!(
+        Response::decode_frame(&resp),
+        Err(WireError::UnknownStatus(99))
+    );
 
     let mut long = Request::new(Op::Flush, 1).encode();
     long.push(0);

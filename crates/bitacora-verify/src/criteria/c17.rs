@@ -125,7 +125,11 @@ pub fn trial(dir: &Path, seed: u64, p: &Params) -> Result<Trial, Box<dyn Error>>
         return Err(format!("replica {primary} was killed but elected").into());
     }
     let live: Vec<u64> = others(primary);
-    let follower = live.iter().copied().find(|id| *id != elected).expect("two live replicas");
+    let follower = live
+        .iter()
+        .copied()
+        .find(|id| *id != elected)
+        .expect("two live replicas");
     let converged = cluster.converge(elected, &[follower], CONVERGE_TIMEOUT)?;
 
     let new_image = cluster.dir().join("nuevo-principal.img");
@@ -141,12 +145,14 @@ pub fn trial(dir: &Path, seed: u64, p: &Params) -> Result<Trial, Box<dyn Error>>
         return Err(format!("export of {} bytes for {blocks} blocks", image.len()).into());
     }
     let lost = image
-        .chunks_exact(BLOCK_SIZE)
+        .as_chunks::<BLOCK_SIZE>()
+        .0
+        .iter()
         .enumerate()
         .filter(|(lba, data)| {
             let min = u64::from(load.acked[*lba]);
             let max = u64::from(load.model.version(*lba as u64));
-            !holds_version(seed, *lba as u64, data, min, max)
+            !holds_version(seed, *lba as u64, *data, min, max)
         })
         .count() as u64;
     Ok(Trial {
