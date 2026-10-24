@@ -22,7 +22,9 @@ pub mod c17;
 pub mod c18;
 pub mod c21;
 pub mod c22;
+pub mod c24;
 pub mod c25;
+pub mod c26;
 pub mod cluster;
 pub mod ublk;
 
@@ -64,7 +66,8 @@ pub struct Runner {
     pub run: fn(&mut Ctx) -> Outcome,
 }
 
-/// Registered runners, in criterion order. Only existing ones are listed.
+/// Registered runners, in the order `all` runs them: c01–c22, c24, c25
+/// and c26 (C23 is `make criteria` itself).
 pub const RUNNERS: &[Runner] = &[
     Runner {
         id: "c01",
@@ -177,9 +180,19 @@ pub const RUNNERS: &[Runner] = &[
         run: c22::run,
     },
     Runner {
+        id: "c24",
+        default_seed: 1,
+        run: c24::run,
+    },
+    Runner {
         id: "c25",
         default_seed: 1,
         run: c25::run,
+    },
+    Runner {
+        id: "c26",
+        default_seed: 1,
+        run: c26::run,
     },
 ];
 

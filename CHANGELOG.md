@@ -2,7 +2,7 @@
 
 ## [Sin publicar]
 
-### K3 — Frontend, rendimiento y operación (en curso)
+### K3 — Frontend, rendimiento y operación (2026-10-24, pendiente de verificación de cierre)
 
 - Traducción de peticiones de bloque en `frontend.rs`, sin dependencia de libublk: sectores de 512 bytes a bloques de 4096, `FLUSH` a `flush`, `FUA` a `write_fua`. Rechaza peticiones no alineadas a 4096, fuera del volumen, `DISCARD` y `WRITE_ZEROES`.
 - `bitacora ublk --volume F [--create SIZE]` (feature `ublk`, `make ublk`): dispositivo con bloque lógico de 4096, caché volátil y FUA, una cola de profundidad 64 y `UBLK_F_USER_RECOVERY | UBLK_F_USER_RECOVERY_REISSUE`. Imprime el id, sirve hasta `SIGTERM` y entonces cierra el volumen y borra el dispositivo. `bitacora ublk --recover DEV_ID --volume F` retoma el dispositivo tras un `SIGKILL`. Sin la feature, el subcomando avisa que el binario se compiló sin ella.
@@ -10,6 +10,10 @@
 - `bitacora capacity --history H.json [--days N]` (`capacity.rs`): lee `{volume_size, segment_size, write_blocks_per_day, overwrite_fraction, snapshots_per_day, snapshot_retention_days}` e imprime `{"projected_physical_bytes": n}` para N días (30 por defecto). El modelo recorre la historia día por día con el empaquetado en lotes y segmentos del flujo caliente, la regla de espacio de la sección 4 y el disparo del GC del ADR 0001, y nunca pasa del tope de `max_segments` segmentos.
 - `bitacora-verify c21`: 4 GiB sobre `FileMedium` con `O_DIRECT`, llenado secuencial, 8 hilos, fases de 30 s de lectura y de escritura aleatoria de 4 KiB (`flush` cada 32 escrituras por hilo) y una fase de sobrescritura con el GC activo. Escribe `results/c21.json` y borra el volumen al terminar. Un resultado bajo 3,000 IOPS se informa en `bajo_referencia`, no falla. Aún no se ha corrido.
 - `bitacora-verify c22`: historial fijo de 30 días sobre 256 MiB (5,000 bloques al día, 70 % de sobrescrituras, un snapshot al día retenido 2 días). Proyecta con el binario `bitacora capacity` antes de aplicar la carga y compara con `st_blocks × 512` de `volume.img`. Aún no se ha corrido.
+- Documento de requisitos de ingeniería (`docs/engineering-requirements.md`): requisitos, garantías prometidas y no prometidas, modos de falla, plan de capacidad de disco y memoria, y qué cambia con volúmenes 100 veces más grandes (checkpoints del índice, ubicación en el índice en vez de tabla hash, índice paginado en disco, GC con colchón).
+- `bitacora-verify c24` comprueba los seis encabezados del documento de requisitos; `bitacora-verify c26` cuenta las líneas del motor y de la verificación con la regla de la sección 13 del contrato y falla si el motor no es mayor o si contiene `#[cfg(test)]`.
+- `bitacora-verify all` corre c01–c22, c24, c25 y c26, y `target/criteria/report.txt` termina con la lista de criterios omitidos y su razón (vacía si no hay).
+- `README.md` documenta el comando único para un clon limpio (`make criteria`), cómo correr C19 y C20 con root (`make ublk` y los scripts), los archivos de `results/` y las condiciones de omisión.
 
 ### K2 — Servicios de datos (2026-10-24)
 
@@ -37,7 +41,7 @@ Razón: es la regla de espacio de la sección 4 del contrato. La prueba de migra
 - Recuperación tras un corte sin cierre ordenado: el volumen vuelve a un prefijo de las escrituras emitidas que incluye todo lo que ya era durable. Al abrir, el motor borra los restos de un lote roto para que no se lean como válidos más adelante.
 - Recolector de basura cost-benefit, con un flujo caliente para las escrituras del cliente y uno frío para las reubicaciones. Modos `Auto`, `Continuous` y `Off`, más `Volume::compact()`. Cuando quedan 2 segmentos libres, la escritura del cliente que necesita uno espera al GC en vez de fallar. Si el GC no puede liberar nada, devuelve `Error::NoSpace`.
 - `bitacora-verify`: disco simulado con cortes, escrituras rotas y errores de E/S inyectados según una semilla; generador SplitMix64 + xoshiro256**; modelo de versiones por bloque; corredores c01–c10 y `bitacora-verify all`, que escribe `target/criteria/report.txt`.
-- Criterios C1–C10 aprobados en el commit `5e91d04`, sin omitidos. C6 medido en `results/c06.json`: amplificación de escritura 2.4599 en `caliente_fria` (umbral 2.5) y 2.9134 en `uniforme` (umbral 3.5).
+- Criterios C1–C10 aprobados en el commit `5e91d04`, sin omitidos. C6 medido en `results/c06.json` (última corrida, sobre `457fd5c`): amplificación de escritura 2.4544 en `caliente_fria` (umbral 2.5) y 2.9185 en `uniforme` (umbral 3.5).
 
 **Disparo del GC en modo Auto (ADR 0001).**
 Decisión: `GcMode::Auto` corre cuando quedan 2 segmentos libres o menos, en lugar de por debajo del 10 % de `max_segments` (contrato, sección 6).

@@ -95,13 +95,16 @@ fn run_one(root: &Path, id: &str, seed: Option<u64>) -> std::io::Result<ExitCode
 fn run_all(root: &Path) -> std::io::Result<ExitCode> {
     let exe = env::current_exe()?;
     let mut report = String::new();
+    let mut skipped = Vec::new();
     let mut failed = false;
     for runner in RUNNERS {
         let code = Command::new(&exe).arg(runner.id).status()?.code();
         let verdict = match code {
             Some(0) => "PASS".to_string(),
             Some(c) if c == i32::from(SKIP_EXIT) => {
-                format!("OMITIDO {}", skip_reason(&root.join(runner.id)))
+                let reason = skip_reason(&root.join(runner.id));
+                skipped.push(format!("{}: {reason}", runner.id));
+                format!("OMITIDO {reason}")
             }
             _ => {
                 failed = true;
@@ -109,6 +112,11 @@ fn run_all(root: &Path) -> std::io::Result<ExitCode> {
             }
         };
         report.push_str(&format!("{}: {verdict}\n", runner.id));
+    }
+    // C23 asks for the list of omitted criteria; it is empty when none was.
+    report.push_str("\nOmitidos:\n");
+    for line in &skipped {
+        report.push_str(&format!("- {line}\n"));
     }
     fs::create_dir_all(root)?;
     fs::write(root.join("report.txt"), &report)?;

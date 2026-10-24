@@ -15,6 +15,7 @@ Fuente única de lo que bitacora no demuestra. Ningún otro archivo los repite.
 
 - Atomicidad garantizada por bloque de 4 KiB, no por petición de varios bloques.
 - Sin checkpoints del índice: el tiempo de apertura crece con el tamaño físico del volumen.
+- El índice y la tabla de registros viven enteros en memoria, y la apertura ordena en memoria una entrada por cada versión de bloque que encuentra en el log. Según el código, sin medir, un volumen de 400 GiB lleno pediría unos 3.9 GiB en régimen y unos 4.9 GiB más durante la apertura (`docs/engineering-requirements.md`). No hay un tamaño de volumen máximo comprobado.
 - Sin TRIM/DISCARD ni WRITE_ZEROES.
 - El frontend ublk tiene una cola de profundidad 64, pero un solo hilo la atiende petición por petición, con llamadas bloqueantes al motor: no hay más de una petición en el motor a la vez por dispositivo.
 - C19 y C20 necesitan root y el módulo `ublk_drv` cargado; sin ellos salen omitidos (77) y el frontend ublk no queda demostrado.
@@ -56,7 +57,9 @@ Fuente única de lo que bitacora no demuestra. Ningún otro archivo los repite.
 - C19 y C20 (ublk) se omiten con código 77 cuando falta root, el módulo `ublk_drv` o el permiso; una omisión no es un aprobado.
 - Los umbrales de C4, C6, C12, C15, C22 y C25 se fijaron en K0 con la cota del diseño y la medición de la plataforma, antes de existir el motor, no con una corrida previa del motor.
 - C24 comprueba solo que el documento de requisitos y sus encabezados existen; si su contenido es correcto es un juicio humano.
-- En C6 la amplificación de escritura varía de una corrida a otra con la misma semilla, porque el hilo del GC no es determinista. Dos corridas dieron 2.4538 y 2.4599 en `caliente_fria`, frente al umbral de 2.5. La dispersión no se midió, así que el margen de aprobación no está acotado.
+- El conteo de C26 reconoce un comentario de bloque `/* … */` solo cuando la línea empieza por `/*`. Las líneas de un comentario de bloque abierto después de código en la misma línea se cuentan como código. Tampoco distingue un `#` dentro de una cadena de varias líneas de shell o Python.
+- La última corrida de C6 en `results/c06.json` se hizo sobre el commit `457fd5c` con cambios sin commit (`-dirty`); el archivo no dice cuáles eran.
+- En C6 la amplificación de escritura varía de una corrida a otra con la misma semilla, porque el hilo del GC no es determinista. Tres corridas dieron 2.4538, 2.4599 y 2.4544 en `caliente_fria`, frente al umbral de 2.5; solo la última sigue en `results/c06.json`, y las otras dos se citan en el ADR 0001 y en la historia de git del archivo. La dispersión no se midió, así que el margen de aprobación no está acotado.
 - El `p99_ms` de C6 se mide sobre un archivo sin `O_DIRECT`, a través de la caché de páginas. No es la latencia del disco.
 - El campo `maquina.disco` de `results/c06.json` lista dos dispositivos y no dice en cuál estaba el archivo medido.
 - C7, C8 y C10 corren con el GC apagado. No prueban la detección de corrupción, los truncados ni los errores de E/S mientras se reubica un segmento. C9 y C5 sí corren con el GC activo.

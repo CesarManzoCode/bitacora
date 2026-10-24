@@ -11,40 +11,63 @@ Es la versión ejecutable y abierta de la tarea de entrevista «Design a Storage
 | K0 | Fundación: contrato, investigación, plan | — | lista |
 | K1 | Volumen durable: log, índice, recuperación, checksums, GC, disco simulado | C1–C10 | Cerrada |
 | K2 | Snapshots, backups, servidor, migración en vivo, réplica, estado | C11–C18, C25 | Cerrada |
-| K3 | ublk, rendimiento, capacidad, documento de requisitos, clon limpio | C19–C24, C26 | pendiente |
+| K3 | ublk, rendimiento, capacidad, documento de requisitos, clon limpio | C19–C24, C26 | Implementada; falta la verificación de cierre |
 
 ## Comandos
 
 - `make check`: formato, lints y pruebas (`cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`). Es lo que corre el CI.
-- `make criteria`: compila en release y corre todos los criterios posibles sin root; escribe `target/criteria/report.txt` con los aprobados, los fallados y los omitidos.
+- `make criteria`: compila en release y corre `bitacora-verify all`, que ejecuta c01–c22, c24, c25 y c26 en ese orden. Escribe `target/criteria/report.txt` con una línea `cNN: PASS|FAIL|OMITIDO <razón>` por criterio y termina con la lista de omitidos (vacía si no hay). Cada corredor deja su salida y sus artefactos en `target/criteria/<cNN>/`.
+- `make ublk`: compila el binario con la feature `ublk` en `target/ublk/release/bitacora`; lo usan C19 y C20.
 
-Requisitos: Rust 1.98.1 (lo fija `rust-toolchain.toml`). Para la feature `ublk` hace falta `clang`; para C19 y C20, root y el módulo `ublk_drv`.
+Requisitos: Rust 1.98.1 (lo fija `rust-toolchain.toml`). Para la feature `ublk` hace falta `clang`; para C19 y C20, root y el módulo `ublk_drv`. C23 mide `make criteria` con `/usr/bin/time -v` (paquete `time`).
+
+### Desde un clon limpio
+
+```sh
+git clone <repositorio> bitacora && cd bitacora
+make criteria
+```
+
+Es el único comando necesario sin root. C19 y C20 necesitan además el binario con ublk y root:
+
+```sh
+make ublk
+sudo modprobe ublk_drv
+sudo bash scripts/c19-ublk.sh
+sudo bash scripts/c20-ublk-recovery.sh
+```
 
 ## Documentos
 
 - [vault/CONTRACT.md](vault/CONTRACT.md): qué hace el sistema y las decisiones de diseño.
-- [vault/RESEARCH.md](vault/RESEARCH.md): fuentes y mediciones.
+- [vault/RESEARCH.md](vault/RESEARCH.md): fuentes y mediciones de la plataforma.
+- [docs/engineering-requirements.md](docs/engineering-requirements.md): requisitos, garantías, modos de falla, plan de capacidad y qué cambia con 100 veces más tamaño.
 - [LIMITATIONS.md](LIMITATIONS.md): lo que el proyecto no demuestra.
-- [CHANGELOG.md](CHANGELOG.md): cambios por versión.
+- [CHANGELOG.md](CHANGELOG.md): cambios por fase.
 
 ## Resultados
 
-Toda cifra de esta sección sale de un archivo de `results/` con la máquina y el comando que la produjeron.
+Toda cifra de esta sección sale de un archivo de `results/` con la máquina, el comando, la fecha y el commit que la produjeron. Los dos archivos los escriben los corredores al correr `make criteria` (o `target/release/bitacora-verify c06` y `c21` por separado) y se versionan con el commit de cierre de cada fase.
 
-En el commit `5e91d04` pasan los criterios C1–C10 (corredores `bitacora-verify c01` a `c10`). Ninguno se omitió.
+- [`results/c06.json`](results/c06.json): amplificación de escritura del GC y p99 por operación (C6).
+- [`results/c21.json`](results/c21.json): IOPS de lectura y de escritura, p50, p99 y p999, p99 durante el GC y si alguna cifra queda bajo la referencia pública de 3,000 IOPS (C21). Todavía no está en el repositorio: C21 no se ha corrido, así que no hay cifras de rendimiento que publicar.
 
-En el commit `457fd5c` pasan los criterios C11–C18 y C25 (corredores `bitacora-verify c11` a `c18` y `c25`), y C1–C10 siguen pasando. Ninguno se omitió. C12, C13, C15 y C25 comparan una cifra medida con un límite: los umbrales de `thresholds.json` en C12, C15 y C25, y 1.1 × 4 KiB por bloque cambiado en C13. Esas cifras todavía no tienen archivo en `results/` con máquina y comando, así que no se publican aquí.
+C1–C10 pasaron en el commit `5e91d04`, y C11–C18 y C25 en `457fd5c`, sin omitidos. Las cifras de C4, C12, C13, C15 y C25 no tienen archivo en `results/`, así que no se publican aquí.
 
 ### C6: amplificación de escritura del GC
 
-Fuente: [`results/c06.json`](results/c06.json). Máquina: AMD Ryzen 5 5600G, kernel 7.2.11-arch1-1. Comando: `target/release/bitacora-verify c06`. Fecha: 2026-10-24T19:49:22Z. Commit: `5e91d04`. Volumen de 1 GiB lleno, luego 3 × volumen de escrituras aleatorias de 4 KiB con `flush` cada 256.
+Fuente: [`results/c06.json`](results/c06.json). Máquina: AMD Ryzen 5 5600G, kernel 7.2.11-arch1-1. Comando: `target/release/bitacora-verify c06`. Fecha: 2026-10-24T22:15:52Z. Commit: `457fd5c` con cambios sin commit (`-dirty` en el archivo). Volumen de 1 GiB lleno, luego 3 × volumen de escrituras aleatorias de 4 KiB con `flush` cada 256.
 
 | Carga | Amplificación de escritura | Umbral | p99 por operación (ms) |
 | --- | --- | --- | --- |
-| `caliente_fria` (20 % de los bloques recibe 80 %) | 2.4599 | 2.5 | 0.0779 |
-| `uniforme` | 2.9134 | 3.5 | 0.0745 |
+| `caliente_fria` (20 % de los bloques recibe 80 %) | 2.4544 | 2.5 | 0.0492 |
+| `uniforme` | 2.9185 | 3.5 | 0.0735 |
 
 Con el disparo de GC anterior al ADR 0001, la misma medición dio 3.9964 y 4.8663 y C6 fallaba ([`results/c06-aa68e3d.json`](results/c06-aa68e3d.json)).
+
+## Omitidos
+
+C19 (`scripts/c19-ublk.sh`, ext4 sobre el dispositivo ublk) y C20 (`scripts/c20-ublk-recovery.sh`, recuperación tras matar el proceso ublk) salen con código 77 y `omitido: <razón>` cuando el proceso no corre como root, cuando no existe `/dev/ublk-control` (módulo `ublk_drv` sin cargar) o cuando no hay permiso de lectura y escritura sobre él. `make criteria` como usuario normal los marca `OMITIDO` en `report.txt` y los lista al final. Un omitido no cuenta como aprobado: sin esas dos corridas, el frontend ublk no queda demostrado.
 
 ## Licencia
 
