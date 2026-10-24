@@ -30,6 +30,16 @@ Fuente única de lo que bitacora no demuestra. Ningún otro archivo los repite.
 - El servidor atiende las peticiones de cada conexión una a una: un cliente no tiene más de una petición en curso por conexión. La concurrencia sale de abrir varias conexiones.
 - `EXPORT` por el socket escribe la imagen en el sistema de archivos del servidor, en la ruta que manda el cliente; el servidor no restringe esa ruta, así que el socket solo debe ser accesible para usuarios de confianza.
 - Una petición con época 0 no se compara con la del volumen; solo se responde `FENCED` a una época distinta de 0 y menor que la del volumen.
+- La replicación tiene tres réplicas fijas, dadas al arrancar con `--peers`; no hay cambio de membresía.
+- La elección no es automática: un principal caído se reemplaza solo cuando alguien corre `bitacora elect`. Hasta entonces las escrituras no se reconocen.
+- Sin ningún seguidor que conteste, el principal no pasa a modo sin réplicas: cada escritura espera 5 s y se responde `IO_ERROR`. Puede volverse durable más tarde.
+- Una escritura respondida con `NOT_PRIMARY`, `IO_ERROR` o sin respuesta puede haber quedado aplicada. El cliente la reenvía a otra réplica; en un bloque es el mismo contenido, pero sobrevivir no está garantizado.
+- El principal lee de su volumen local, que incluye escrituras aún no durables en mayoría. Un principal aislado que todavía no recibió `FENCED` puede servir lecturas viejas.
+- Una resincronización completa reemplaza el volumen del seguidor: sus snapshots locales se pierden.
+- Un delta interrumpido obliga a una resincronización completa la siguiente vez, aunque la mayor parte del volumen ya coincida.
+- `epoch_history` guarda hasta 64 épocas. Un seguidor cuya última época ya salió del historial del principal recibe una resincronización completa.
+- La cola de bloques pendientes del principal guarda hasta 16,384 bloques (64 MiB) por seguidor; uno que se atrasa más se resincroniza desde el volumen.
+- Un principal fijo en `SIGSTOP` no se entera de la nueva época hasta que reanuda: al reanudar, su primer `APPEND` o latido recibe `FENCED`.
 
 ## Verificación
 

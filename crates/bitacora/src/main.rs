@@ -8,8 +8,8 @@ use std::sync::Arc;
 
 use bitacora::backup;
 use bitacora::medium::FileMedium;
-use bitacora::server;
-use bitacora::{Client, GcMode, Server, Version, Volume, VolumeConfig};
+use bitacora::{replica, server};
+use bitacora::{Client, GcMode, Replica, ReplicaConfig, Server, Version, Volume, VolumeConfig};
 
 const USAGE: &str = "\
 usage: bitacora <command> [options]
@@ -22,8 +22,9 @@ commands:
   restore    --out F BKP...
   serve      --volume F --socket S [--create SIZE]
   status     --socket S [--json]
-  replica    run a replica process
-  elect      elect a primary among replicas
+  replica    --id N --volume F --socket S --peers ID=S,... [--create SIZE]
+             [--segment-size SIZE]
+  elect      --replicas S1,S2,S3
   migrate    live-migrate a volume between servers
   capacity   project physical capacity from a write history
   ublk       expose a volume as a ublk block device (feature `ublk`)";
@@ -67,6 +68,8 @@ fn run(args: &[String]) -> Result<(), CliError> {
         "restore" => restore(rest),
         "serve" => serve(rest),
         "status" => status(rest),
+        "replica" => replica_cmd(rest),
+        "elect" => elect(rest),
         "help" | "--help" | "-h" => {
             println!("{USAGE}");
             Ok(())
@@ -321,5 +324,90 @@ fn status(args: &[String]) -> Result<(), CliError> {
             s.used_segments, s.free_segments, s.max_segments
         );
     }
+    Ok(())
+}
+
+/// `ID=SOCKET,...` of `--peers`.
+fn parse_peers(text: &str) -> Result<Vec<(u64, PathBuf)>, CliError> {
+    text.split(',')
+        .filter(|p| !p.is_empty())
+        .map(|p| {
+            let (id, socket) = p
+                .split_once('=')
+                .ok_or_else(|| CliError::Usage(format!("peer {p} is not ID=SOCKET")))?;
+            let id = id
+                .parse()
+                .map_err(|_| CliError::Usage(format!("invalid peer id: {id}")))?;
+            Ok((id, PathBuf::from(socket)))
+        })
+        .collect()
+}
+
+/// `replica --id N --volume F --socket S --peers ID=S,... [--create SIZE]
+/// [--segment-size SIZE]`: runs a replica (contract section 9) until
+/// `SIGTERM` or `SIGINT`. It starts as a follower; `elect` makes a primary.
+/// With `--create`, a missing or empty file becomes a new volume of SIZE
+/// bytes.
+fn replica_cmd(args: &[String]) -> Result<(), CliError> {
+    let opts = Options::parse(
+        args,
+        &["id", "volume", "socket", "peers", "create", "segment-size"],
+    )?;
+    if !opts.positional.is_empty() {
+        return Err(CliError::Usage("replica: unexpected arguments".into()));
+    }
+    let id_text = opts.require("id")?;
+    let id = id_text
+        .parse()
+        .map_err(|_| CliError::Usage(format!("invalid replica id: {id_text}")))?;
+    let peers = parse_peers(opts.require("peers")?)?;
+    let segment = opts.get("segment-size").map(parse_size).transpose()?;
+    let create = opts
+        .get("create")
+        .map(parse_size)
+        .transpose()?
+        .map(|size| match segment {
+            Some(seg) => VolumeConfig::new(size).with_segment_size(seg),
+            None => VolumeConfig::new(size),
+        });
+    // Before any thread exists, so that only the signal thread gets them.
+    server::block_signals().map_err(|e| CliError::Failed(e.to_string()))?;
+    let running = Replica::start(ReplicaConfig {
+        id,
+        volume: PathBuf::from(opts.require("volume")?),
+        socket: PathBuf::from(opts.require("socket")?),
+        peers,
+        create,
+        gc_mode: GcMode::Auto,
+    })?;
+    let stopper = running.stopper();
+    server::on_signal(move || stopper.stop()).map_err(|e| CliError::Failed(e.to_string()))?;
+    running.wait()?;
+    Ok(())
+}
+
+/// `elect --replicas S1,S2,S3`: two-phase election; prints the elected
+/// replica, its epoch and its socket.
+fn elect(args: &[String]) -> Result<(), CliError> {
+    let opts = Options::parse(args, &["replicas"])?;
+    if !opts.positional.is_empty() {
+        return Err(CliError::Usage("elect: unexpected arguments".into()));
+    }
+    let sockets: Vec<PathBuf> = opts
+        .require("replicas")?
+        .split(',')
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+        .collect();
+    if sockets.is_empty() {
+        return Err(CliError::Usage("elect needs at least one replica".into()));
+    }
+    let elected = replica::elect(&sockets)?;
+    println!(
+        "primary {} epoch {} socket {}",
+        elected.id,
+        elected.epoch,
+        elected.socket.display()
+    );
     Ok(())
 }

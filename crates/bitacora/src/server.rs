@@ -1,6 +1,9 @@
 //! Unix socket server (contract section 8): one thread per connection, and
 //! the requests of a connection answered in order, one at a time.
 //!
+//! What a request does is up to a `Handler`: a standalone volume
+//! (`Server::bind`) or a replica (`replica.rs`, through `Server::with_handler`).
+//!
 //! Shutdown is orderly: `ServerHandle::shutdown` stops accepting, closes the
 //! read side of every connection so each thread finishes the request in
 //! flight, answers it and exits, and `Server::run` returns once every thread
@@ -24,13 +27,26 @@ use crate::status::StatusReport;
 use crate::volume::Volume;
 use crate::wire::{self, Op, Request, Response, Status};
 
-/// State shared by the accept loop, the connections and the handles.
-struct Shared {
+/// Answers the requests of a server. Called from one thread per
+/// connection, so it must be shareable.
+pub trait Handler: Send + Sync {
+    fn handle(&self, req: &Request) -> Response;
+}
+
+/// A volume served without replicas.
+struct Standalone {
     volume: Arc<Volume>,
-    path: PathBuf,
-    stop: AtomicBool,
     /// Destination socket once the volume moved (section 10).
     moved: RwLock<Option<String>>,
+}
+
+/// State shared by the accept loop, the connections and the handles.
+struct Shared {
+    handler: Arc<dyn Handler>,
+    /// Set when the handler is a standalone volume.
+    standalone: Option<Arc<Standalone>>,
+    path: PathBuf,
+    stop: AtomicBool,
     /// A clone of every open connection, to close its read side on shutdown.
     conns: Mutex<HashMap<u64, UnixStream>>,
     next_conn: AtomicU64,
@@ -48,9 +64,27 @@ pub struct ServerHandle {
 }
 
 impl Server {
-    /// Binds `socket`, replacing a stale socket file left by a previous
-    /// process. Any other existing file is an error.
+    /// Serves `volume` without replicas on `socket`, replacing a stale
+    /// socket file left by a previous process. Any other existing file is an
+    /// error.
     pub fn bind(volume: Arc<Volume>, socket: &Path) -> Result<Server> {
+        let standalone = Arc::new(Standalone {
+            volume,
+            moved: RwLock::new(None),
+        });
+        Server::open(standalone.clone(), Some(standalone), socket)
+    }
+
+    /// Serves `handler` on `socket`, with the same socket rules as `bind`.
+    pub fn with_handler(handler: Arc<dyn Handler>, socket: &Path) -> Result<Server> {
+        Server::open(handler, None, socket)
+    }
+
+    fn open(
+        handler: Arc<dyn Handler>,
+        standalone: Option<Arc<Standalone>>,
+        socket: &Path,
+    ) -> Result<Server> {
         if let Ok(meta) = fs::symlink_metadata(socket) {
             if !meta.file_type().is_socket() {
                 return Err(Error::InvalidArgument(format!(
@@ -64,10 +98,10 @@ impl Server {
         Ok(Server {
             listener,
             shared: Arc::new(Shared {
-                volume,
+                handler,
+                standalone,
                 path: socket.to_path_buf(),
                 stop: AtomicBool::new(false),
-                moved: RwLock::new(None),
                 conns: Mutex::new(HashMap::new()),
                 next_conn: AtomicU64::new(0),
             }),
@@ -145,17 +179,22 @@ impl ServerHandle {
     }
 
     /// From now on every request is answered `MOVED` with `destination`;
-    /// a request answered `MOVED` is not executed.
+    /// a request answered `MOVED` is not executed. Only a standalone volume
+    /// moves; on any other server it does nothing.
     pub fn set_moved(&self, destination: &str) {
-        let mut moved = match self.shared.moved.write() {
+        let Some(standalone) = &self.shared.standalone else {
+            return;
+        };
+        let mut moved = match standalone.moved.write() {
             Ok(m) => m,
             Err(poisoned) => poisoned.into_inner(),
         };
         *moved = Some(destination.to_string());
     }
 
-    pub fn volume(&self) -> &Arc<Volume> {
-        &self.shared.volume
+    /// The volume of a standalone server.
+    pub fn volume(&self) -> Option<&Arc<Volume>> {
+        self.shared.standalone.as_ref().map(|s| &s.volume)
     }
 }
 
@@ -179,7 +218,7 @@ fn serve_connection(shared: &Shared, stream: UnixStream) {
             Ok(Some(req)) => req,
             Ok(None) | Err(_) => return,
         };
-        let resp = handle_request(shared, &req);
+        let resp = shared.handler.handle(&req);
         if wire::write_response(&mut writer, &resp).is_err() {
             return;
         }
@@ -196,31 +235,46 @@ pub fn error_status(e: &Error) -> Status {
     }
 }
 
-/// Answers one request: `MOVED` once the volume moved, `FENCED` for an
-/// epoch older than the volume's, otherwise the result of the engine call.
-fn handle_request(shared: &Shared, req: &Request) -> Response {
-    let moved = match shared.moved.read() {
-        Ok(m) => m.clone(),
-        Err(poisoned) => poisoned.into_inner().clone(),
-    };
-    if let Some(dest) = moved {
-        return Response::error(req.req_id, Status::Moved, &dest);
+impl Handler for Standalone {
+    /// Answers one request: `MOVED` once the volume moved, `FENCED` for an
+    /// epoch older than the volume's, otherwise the result of the engine
+    /// call.
+    fn handle(&self, req: &Request) -> Response {
+        let moved = match self.moved.read() {
+            Ok(m) => m.clone(),
+            Err(poisoned) => poisoned.into_inner().clone(),
+        };
+        if let Some(dest) = moved {
+            return Response::error(req.req_id, Status::Moved, &dest);
+        }
+        let vol = &self.volume;
+        if req.epoch != 0 && req.epoch < vol.epoch() {
+            return Response::error(
+                req.req_id,
+                Status::Fenced,
+                &format!("epoch {} is older than {}", req.epoch, vol.epoch()),
+            );
+        }
+        let result = match req.op {
+            Op::Status => StatusReport::standalone(vol, None).map(|r| r.to_json().into_bytes()),
+            _ => execute(vol, req),
+        };
+        respond(req, result)
     }
-    let vol = &shared.volume;
-    if req.epoch != 0 && req.epoch < vol.epoch() {
-        return Response::error(
-            req.req_id,
-            Status::Fenced,
-            &format!("epoch {} is older than {}", req.epoch, vol.epoch()),
-        );
-    }
-    match execute(vol, req) {
+}
+
+/// The response to `req` for the result of its engine call.
+pub fn respond(req: &Request, result: Result<Vec<u8>>) -> Response {
+    match result {
         Ok(payload) => Response::ok(req.req_id, payload),
         Err(e) => Response::error(req.req_id, error_status(&e), &e.to_string()),
     }
 }
 
-fn execute(vol: &Volume, req: &Request) -> Result<Vec<u8>> {
+/// Executes a data-plane op on `vol` and returns the payload of its answer.
+/// `STATUS` and the ops of replication and migration are left to the
+/// handler and answered `IO_ERROR` here.
+pub fn execute(vol: &Volume, req: &Request) -> Result<Vec<u8>> {
     let nblocks = u64::from(req.nblocks);
     match req.op {
         Op::Read => {
@@ -249,7 +303,6 @@ fn execute(vol: &Volume, req: &Request) -> Result<Vec<u8>> {
             vol.flush()?;
             Ok(Vec::new())
         }
-        Op::Status => Ok(StatusReport::standalone(vol, None)?.to_json().into_bytes()),
         Op::SnapshotCreate => Ok(vol.snapshot_create()?.to_le_bytes().to_vec()),
         Op::SnapshotDelete => {
             vol.snapshot_delete(payload_u64(&req.payload)?)?;
@@ -270,7 +323,7 @@ fn execute(vol: &Volume, req: &Request) -> Result<Vec<u8>> {
             Ok(Vec::new())
         }
         op => Err(Error::InvalidArgument(format!(
-            "op {op:?} is not served by a standalone server"
+            "op {op:?} is not served by this server"
         ))),
     }
 }
@@ -298,6 +351,12 @@ pub fn block_signals() -> io::Result<()> {
 /// Spawns a thread that waits for `SIGTERM` or `SIGINT` (blocked by
 /// `block_signals`) and shuts the server down.
 pub fn shutdown_on_signal(handle: ServerHandle) -> io::Result<JoinHandle<()>> {
+    on_signal(move || handle.shutdown())
+}
+
+/// Spawns a thread that waits for `SIGTERM` or `SIGINT` (blocked by
+/// `block_signals`) and then runs `stop`.
+pub fn on_signal(stop: impl FnOnce() + Send + 'static) -> io::Result<JoinHandle<()>> {
     thread::Builder::new()
         .name("bitacora-signal".into())
         .spawn(move || {
@@ -305,7 +364,7 @@ pub fn shutdown_on_signal(handle: ServerHandle) -> io::Result<JoinHandle<()>> {
             let mut sig: libc::c_int = 0;
             // SAFETY: `set` is initialised and `sig` is a valid out pointer.
             unsafe { libc::sigwait(&set, &mut sig) };
-            handle.shutdown();
+            stop();
         })
 }
 

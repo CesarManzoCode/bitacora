@@ -16,9 +16,16 @@
 //! next to the live one; every version that references a `birth` counts in
 //! its record's `refcount`.
 //!
+//! Replication (`resync.rs`) adds the third stream: blocks a follower
+//! receives from the primary with their original `birth`.
+//!
 //! Lock order: `Core::gc_lock`, then `Core::reuse`, then `Core::inner`.
 
 mod recovery;
+mod resync;
+
+pub(crate) use resync::PIN_BASE;
+pub use resync::Pin;
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, RwLock};
@@ -258,7 +265,10 @@ pub(crate) struct Inner {
     next_seg_gen: u64,
     hot: Option<OpenSegment>,
     pub(crate) cold: Option<OpenSegment>,
-    /// The cold stream has writes not yet covered by a `fdatasync`.
+    /// Open segment of the resync stream.
+    resync: Option<OpenSegment>,
+    /// The cold or the resync stream has writes not yet covered by a
+    /// `fdatasync`.
     pub(crate) cold_dirty: bool,
     batch: Option<OpenBatch>,
     /// Grows on every event that can create a GC victim or free space:
@@ -725,6 +735,7 @@ impl Inner {
             next_seg_gen: 1,
             hot: None,
             cold: None,
+            resync: None,
             cold_dirty: false,
             batch: None,
             changes: 0,
@@ -893,7 +904,8 @@ impl Inner {
         }
         let prev = match stream {
             Stream::Hot => self.hot.take(),
-            _ => self.cold.take(),
+            Stream::Cold => self.cold.take(),
+            Stream::Resync => self.resync.take(),
         };
         if let Some(prev) = prev
             && let Some(info) = self.segments[prev.index as usize].as_mut()
@@ -930,7 +942,8 @@ impl Inner {
         });
         match stream {
             Stream::Hot => self.hot = open,
-            _ => self.cold = open,
+            Stream::Cold => self.cold = open,
+            Stream::Resync => self.resync = open,
         }
         Ok(())
     }
@@ -981,14 +994,28 @@ impl Inner {
         &mut self,
         items: &[(BatchEntry, &[u8])],
     ) -> Result<Option<(usize, u64, u64)>> {
-        let room = self.cold.map_or(0, |c| self.geo.seg_blocks - c.next_block);
+        self.append_kept(Stream::Cold, items)
+    }
+
+    /// `append_cold` for the cold or the resync stream: blocks that keep
+    /// the `birth` they were born with.
+    fn append_kept(
+        &mut self,
+        stream: Stream,
+        items: &[(BatchEntry, &[u8])],
+    ) -> Result<Option<(usize, u64, u64)>> {
+        let open = |inner: &Inner| match stream {
+            Stream::Resync => inner.resync,
+            _ => inner.cold,
+        };
+        let room = open(&*self).map_or(0, |c| self.geo.seg_blocks - c.next_block);
         if room < 2 {
             if self.free_segments == 0 {
                 return Ok(None);
             }
-            self.open_segment(Stream::Cold)?;
+            self.open_segment(stream)?;
         }
-        let cold = self.cold.expect("open_segment left a cold segment");
+        let cold = open(&*self).expect("open_segment left a segment of the stream");
         let k = items
             .len()
             .min((self.geo.seg_blocks - cold.next_block - 1) as usize)
@@ -1000,7 +1027,7 @@ impl Inner {
         let summary = BatchSummary {
             volume_id: self.geo.volume_id,
             seg_gen: cold.seg_gen,
-            stream: Stream::Cold,
+            stream,
             epoch: self.sb.current_epoch,
             first_lsn: items[0].0.birth,
             synced_through_lsn: self.synced_lsn,
@@ -1017,7 +1044,11 @@ impl Inner {
         self.fail_on(r)?;
         self.cold_dirty = true;
         let first_block = cold.next_block + 1;
-        if let Some(c) = self.cold.as_mut() {
+        let open_mut = match stream {
+            Stream::Resync => self.resync.as_mut(),
+            _ => self.cold.as_mut(),
+        };
+        if let Some(c) = open_mut {
             c.next_block += 1 + k as u64;
         }
         if let Some(info) = self.segments[cold.index as usize].as_mut() {

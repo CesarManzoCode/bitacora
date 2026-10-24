@@ -19,7 +19,7 @@ use std::path::Path;
 use crate::error::{Error, Result};
 use crate::format::{BLOCK_SIZE_U64, MAX_SNAPSHOTS, SNAPSHOT_FLAG_DELETED, SnapshotEntry};
 use crate::index::Index;
-use crate::volume::Volume;
+use crate::volume::{PIN_BASE, Volume};
 
 /// Blocks per read when exporting.
 const EXPORT_CHUNK: u64 = 256;
@@ -109,7 +109,8 @@ impl Volume {
         Ok(())
     }
 
-    /// Snapshots not deleted, by id.
+    /// Snapshots not deleted, by id. Pins (`volume/resync.rs`) are not
+    /// snapshots and are left out.
     pub fn snapshots(&self) -> Vec<SnapshotInfo> {
         let inner = match self.core.inner.lock() {
             Ok(inner) => inner,
@@ -117,7 +118,7 @@ impl Volume {
         };
         inner
             .snapshots
-            .iter()
+            .range(..PIN_BASE)
             .map(|(id, f)| SnapshotInfo { id: *id, lsn: f.lsn })
             .collect()
     }
