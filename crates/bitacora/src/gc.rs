@@ -30,7 +30,9 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use crate::error::{Error, Result};
-use crate::format::{BLOCK_SIZE, BLOCK_SIZE_U64, BatchEntry, BatchSummary, data_crc, segment_offset};
+use crate::format::{
+    BLOCK_SIZE, BLOCK_SIZE_U64, BatchEntry, BatchSummary, data_crc, segment_offset,
+};
 use crate::medium::AlignedBuf;
 use crate::volume::{Core, GcMode, Inner, VolumeState};
 
@@ -133,9 +135,9 @@ impl Inner {
 
     /// Whether `birth` is live and its record is at `segment`, `block`.
     fn live_at(&self, birth: u64, segment: u64, block: u64) -> bool {
-        self.records.get(birth).is_some_and(|r| {
-            u64::from(r.segment) == segment && u64::from(r.block) == block
-        })
+        self.records
+            .get(birth)
+            .is_some_and(|r| u64::from(r.segment) == segment && u64::from(r.block) == block)
     }
 
     /// The best victim by cost-benefit among sealed segments with dead data.
@@ -207,8 +209,7 @@ impl TokenBucket {
         let now = Instant::now();
         let elapsed = now.duration_since(self.last).as_secs_f64();
         self.last = now;
-        self.tokens =
-            (self.tokens + elapsed * GC_RATE_BYTES_PER_SEC as f64).min(GC_BURST_BYTES);
+        self.tokens = (self.tokens + elapsed * GC_RATE_BYTES_PER_SEC as f64).min(GC_BURST_BYTES);
     }
 
     /// Spends `bytes` tokens, waiting for the deficit if there is one.
@@ -396,7 +397,9 @@ fn clean(core: &Core, victim: u64, mut bucket: Option<&mut TokenBucket>) -> Resu
             let mut items = Vec::with_capacity(chunk.len() - done);
             for (e, b) in &chunk[done..] {
                 let start = *b as usize * BLOCK_SIZE;
-                let data = buf.get(start..start + BLOCK_SIZE).filter(|_| start + BLOCK_SIZE <= got);
+                let data = buf
+                    .get(start..start + BLOCK_SIZE)
+                    .filter(|_| start + BLOCK_SIZE <= got);
                 match data {
                     Some(d) if data_crc(e.lba, e.birth, d) == e.data_crc => items.push((*e, d)),
                     _ => {

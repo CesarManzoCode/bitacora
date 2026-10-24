@@ -246,7 +246,8 @@ fn reopen_after_gc_without_close_keeps_everything_flushed() {
             let lba = rng.below(BLOCKS);
             version[lba as usize] += 1;
             after_flush[lba as usize].push(version[lba as usize]);
-            vol.write(lba, &pattern(lba, version[lba as usize])).unwrap();
+            vol.write(lba, &pattern(lba, version[lba as usize]))
+                .unwrap();
         }
         // Dropped without `close`: no orderly shutdown.
     }
