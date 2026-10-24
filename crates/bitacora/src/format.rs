@@ -91,8 +91,7 @@ pub fn segment_offset(index: u64, segment_size: u64) -> u64 {
 
 /// Whether `segment_size` is a power of two within the configurable range.
 pub fn valid_segment_size(segment_size: u64) -> bool {
-    segment_size.is_power_of_two()
-        && (MIN_SEGMENT_SIZE..=MAX_SEGMENT_SIZE).contains(&segment_size)
+    segment_size.is_power_of_two() && (MIN_SEGMENT_SIZE..=MAX_SEGMENT_SIZE).contains(&segment_size)
 }
 
 /// `crc32c(lba ‖ birth ‖ data)`: a misdirected block or a block of another

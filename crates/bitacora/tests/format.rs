@@ -258,10 +258,7 @@ fn select_superblock_falls_back_when_newer_is_corrupt() {
     assert_eq!(slot, SuperblockSlot::B);
     assert_eq!(sb.sb_seq, 8);
 
-    assert!(matches!(
-        select_superblock(&a2, &b),
-        Err(Error::Corrupt(_))
-    ));
+    assert!(matches!(select_superblock(&a2, &b), Err(Error::Corrupt(_))));
 }
 
 #[test]

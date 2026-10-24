@@ -14,6 +14,8 @@ pub enum Error {
     Corrupt(String),
     /// The volume is in the fail-stop state.
     Failed,
+    /// The volume was closed.
+    Closed,
     /// No free segment is left and the GC cannot free one.
     NoSpace,
     /// The caller passed an invalid argument.
@@ -29,6 +31,7 @@ impl fmt::Display for Error {
             Error::Integrity { lba } => write!(f, "integrity error at lba {lba}"),
             Error::Corrupt(msg) => write!(f, "corrupt volume: {msg}"),
             Error::Failed => write!(f, "volume failed"),
+            Error::Closed => write!(f, "volume closed"),
             Error::NoSpace => write!(f, "no space left on volume"),
             Error::InvalidArgument(msg) => write!(f, "invalid argument: {msg}"),
         }
