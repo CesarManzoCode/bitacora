@@ -16,6 +16,7 @@ pub mod migrate;
 pub mod replica;
 pub mod server;
 pub mod snapshot;
+pub mod socket;
 pub mod status;
 #[cfg(feature = "ublk")]
 pub mod ublk;

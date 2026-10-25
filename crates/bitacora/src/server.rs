@@ -105,7 +105,7 @@ impl Server {
             }
             fs::remove_file(socket)?;
         }
-        let listener = UnixListener::bind(socket)?;
+        let listener = crate::socket::bind(socket)?;
         Ok(Server {
             listener,
             shared: Arc::new(Shared {
@@ -182,7 +182,7 @@ impl ServerHandle {
     pub fn shutdown(&self) {
         if !self.shared.stop.swap(true, Ordering::SeqCst) {
             // Wakes the accept loop, which then sees `stop`.
-            let _ = UnixStream::connect(&self.shared.path);
+            let _ = crate::socket::connect(&self.shared.path);
         }
         for conn in lock(&self.shared.conns).values() {
             let _ = conn.shutdown(Shutdown::Read);

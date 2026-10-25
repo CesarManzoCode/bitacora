@@ -1258,7 +1258,7 @@ pub struct PeerConn {
 
 impl PeerConn {
     pub fn open(socket: &Path, timeout: Duration) -> io::Result<PeerConn> {
-        let stream = UnixStream::connect(socket)?;
+        let stream = crate::socket::connect(socket)?;
         stream.set_read_timeout(Some(timeout))?;
         stream.set_write_timeout(Some(timeout))?;
         let write_half = stream.try_clone()?;

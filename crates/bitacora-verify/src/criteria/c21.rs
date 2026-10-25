@@ -27,9 +27,7 @@ use bitacora::gc::GC_RESERVE_SEGMENTS;
 use bitacora::medium::FileMedium;
 use bitacora::{GcMode, Volume, VolumeConfig};
 
-use super::c06::{
-    commit, cpu_model, disk_models, json_num, json_str, kernel, percentile, utc_now,
-};
+use super::c06::{commit, cpu_model, disk_models, json_num, json_str, kernel, percentile, utc_now};
 use super::{Ctx, Outcome, Verdict, repo_root};
 use crate::rng::Rng;
 

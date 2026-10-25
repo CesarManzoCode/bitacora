@@ -124,7 +124,10 @@ impl fmt::Display for FrontendError {
                 write!(f, "unaligned request: sector {sector}, {sectors} sectors")
             }
             FrontendError::OutOfRange { sector, sectors } => {
-                write!(f, "request out of range: sector {sector}, {sectors} sectors")
+                write!(
+                    f,
+                    "request out of range: sector {sector}, {sectors} sectors"
+                )
             }
             FrontendError::Unsupported(op) => write!(f, "unsupported operation: {op:?}"),
             FrontendError::BufferTooSmall { needed, len } => {
@@ -156,7 +159,10 @@ pub fn translate(req: &Request, volume_blocks: u64) -> Result<Command, FrontendE
     }
     let lba = sector / SECTORS_PER_BLOCK;
     let nblocks = count / SECTORS_PER_BLOCK;
-    if lba.checked_add(nblocks).is_none_or(|end| end > volume_blocks) {
+    if lba
+        .checked_add(nblocks)
+        .is_none_or(|end| end > volume_blocks)
+    {
         return Err(FrontendError::OutOfRange { sector, sectors });
     }
     Ok(if write {
@@ -186,7 +192,9 @@ pub fn execute(vol: &Volume, req: &Request, buf: &mut [u8]) -> Result<usize, Fro
             let data = vol.read(lba, nblocks)?;
             buf[..bytes].copy_from_slice(&data);
         }
-        Command::Write { lba, fua: false, .. } => vol.write(lba, &buf[..bytes])?,
+        Command::Write {
+            lba, fua: false, ..
+        } => vol.write(lba, &buf[..bytes])?,
         Command::Write { lba, fua: true, .. } => vol.write_fua(lba, &buf[..bytes])?,
         Command::Flush => vol.flush()?,
     }

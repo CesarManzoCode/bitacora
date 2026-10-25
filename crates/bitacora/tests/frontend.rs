@@ -126,7 +126,10 @@ fn rejects_requests_out_of_range() {
 
 #[test]
 fn rejects_discard_and_write_zeroes() {
-    for (op, expected) in [(OP_DISCARD, Op::Discard), (OP_WRITE_ZEROES, Op::WriteZeroes)] {
+    for (op, expected) in [
+        (OP_DISCARD, Op::Discard),
+        (OP_WRITE_ZEROES, Op::WriteZeroes),
+    ] {
         let err = frontend::translate(&req(op, 0, 8), BLOCKS).unwrap_err();
         assert!(matches!(err, FrontendError::Unsupported(o) if o == expected));
         assert_eq!(err.errno(), libc::EOPNOTSUPP);
@@ -153,7 +156,12 @@ fn executes_against_a_volume() {
 
     // FUA write: durable on return (write_fua).
     let mut buf = pattern(9, 2);
-    frontend::execute(&vol, &req(OP_WRITE | FLAG_FUA, 9 * SPB, SPB as u32), &mut buf).unwrap();
+    frontend::execute(
+        &vol,
+        &req(OP_WRITE | FLAG_FUA, 9 * SPB, SPB as u32),
+        &mut buf,
+    )
+    .unwrap();
     let st = vol.status();
     assert_eq!(st.durable_lsn, st.lsn);
 

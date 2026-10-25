@@ -60,7 +60,7 @@ Cada requisito tiene su criterio mecánico en la tabla de la sección 12 del con
 
 - Atomicidad de una petición de varios bloques; solo por bloque.
 - Durabilidad de una escritura local antes de `flush` o `write_fua`: el volumen local se comporta como un disco con caché de escritura volátil.
-- Un rendimiento mínimo. C21 informa IOPS y latencias y si quedan bajo la referencia pública de 3,000 IOPS; no falla por ello. [hecho] `results/c21.json` aún no existe en el repositorio: C21 no se ha corrido.
+- Un rendimiento mínimo. C21 informa IOPS y latencias y si quedan bajo la referencia pública de 3,000 IOPS; no falla por ello. [hecho] La corrida registrada (`results/c21.json`, commit `88a5e82`) midió 28816.9875 IOPS de lectura y 11723.7302 de escritura, por encima de la referencia de 3,000.
 - Elección automática del principal, cambio de membresía, comportamiento en una red real o con la caché interna de un SSD.
 - Que los snapshots viajen con la replicación, la migración o un backup.
 - Que las lecturas de un principal aislado sean recientes, ni que una escritura respondida con error no haya quedado aplicada.

@@ -386,7 +386,7 @@ impl Client {
 }
 
 fn open(path: &Path, timeout: Option<Duration>) -> io::Result<Conn> {
-    let stream = UnixStream::connect(path)?;
+    let stream = crate::socket::connect(path)?;
     stream.set_read_timeout(timeout)?;
     stream.set_write_timeout(timeout)?;
     let write_half = stream.try_clone()?;

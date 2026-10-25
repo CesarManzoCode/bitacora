@@ -10,7 +10,6 @@ use std::env;
 use std::error::Error;
 use std::fs::{self, OpenOptions};
 use std::io;
-use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::thread;
@@ -133,7 +132,7 @@ impl Cluster {
         let socket = self.socket(id);
         let deadline = Instant::now() + READY_TIMEOUT;
         loop {
-            if UnixStream::connect(&socket).is_ok() {
+            if bitacora::socket::connect(&socket).is_ok() {
                 return Ok(());
             }
             if let Some(child) = self.children[slot(id)].as_mut()

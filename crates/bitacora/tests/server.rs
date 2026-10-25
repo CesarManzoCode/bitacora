@@ -164,12 +164,16 @@ struct Running {
 }
 
 fn start(dir: &Path) -> Running {
+    start_at(dir, &dir.join("s.sock"))
+}
+
+fn start_at(dir: &Path, socket: &Path) -> Running {
     let medium = Arc::new(FileMedium::create(&dir.join("volume.img"), false).unwrap());
     let config = VolumeConfig::new(VOLUME)
         .with_segment_size(SEGMENT)
         .with_gc_mode(GcMode::Auto);
     let volume = Arc::new(Volume::create(medium, config).unwrap());
-    let socket = dir.join("s.sock");
+    let socket = socket.to_path_buf();
     let server = Server::bind(volume.clone(), &socket).unwrap();
     let handle = server.handle();
     let thread = thread::spawn(move || server.run());
@@ -188,6 +192,22 @@ impl Running {
         assert!(!self.socket.exists());
         self.volume.close().unwrap();
     }
+}
+
+#[test]
+fn socket_path_longer_than_sun_path_serves() {
+    let dir = temp_dir("long-path").join("d".repeat(120));
+    fs::create_dir_all(&dir).unwrap();
+    let socket = dir.join("s.sock");
+    assert!(socket.as_os_str().len() > 108);
+    let srv = start_at(&dir, &socket);
+    assert!(socket.exists());
+
+    let mut client = Client::connect(&srv.socket).unwrap();
+    client.write_fua(3, &block(3)).unwrap();
+    assert_eq!(client.read(3, 1).unwrap(), block(3));
+    drop(client);
+    srv.stop();
 }
 
 #[test]

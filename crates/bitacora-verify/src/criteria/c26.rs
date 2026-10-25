@@ -126,7 +126,11 @@ fn count_rust(dir: &Path) -> io::Result<u64> {
 fn count_any(dir: &Path) -> io::Result<u64> {
     let mut total = 0;
     for path in files(dir)? {
-        let lang = if is_rust(&path) { Lang::Rust } else { Lang::Hash };
+        let lang = if is_rust(&path) {
+            Lang::Rust
+        } else {
+            Lang::Hash
+        };
         total += count_lines(&fs::read_to_string(&path)?, lang);
     }
     Ok(total)
@@ -157,5 +161,7 @@ pub fn run(ctx: &mut Ctx) -> Outcome {
     }
     ctx.line(format!("lineas_motor: {engine}"));
     ctx.line(format!("lineas_verificacion: {verification}"));
-    Ok(Verdict::from_pass(engine > verification && cfg_test.is_empty()))
+    Ok(Verdict::from_pass(
+        engine > verification && cfg_test.is_empty(),
+    ))
 }

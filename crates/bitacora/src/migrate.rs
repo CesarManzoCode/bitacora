@@ -283,7 +283,7 @@ struct Peer {
 
 impl Peer {
     fn connect(path: &Path) -> Result<Peer> {
-        let stream = UnixStream::connect(path)?;
+        let stream = crate::socket::connect(path)?;
         stream.set_read_timeout(Some(PEER_TIMEOUT))?;
         stream.set_write_timeout(Some(PEER_TIMEOUT))?;
         let write_half = stream.try_clone()?;

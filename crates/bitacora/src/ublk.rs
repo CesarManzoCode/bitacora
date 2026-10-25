@@ -137,9 +137,11 @@ fn serve_queue(qid: u16, dev: &UblkDev, vol: &Volume) {
                 -e.errno()
             }
         };
-        if let Err(e) =
-            q.complete_io_cmd_unified(tag, BufDesc::Slice(buf.as_slice()), Ok(UblkIORes::Result(res)))
-        {
+        if let Err(e) = q.complete_io_cmd_unified(
+            tag,
+            BufDesc::Slice(buf.as_slice()),
+            Ok(UblkIORes::Result(res)),
+        ) {
             eprintln!("bitacora: ublk: completing tag {tag}: {e}");
         }
     });

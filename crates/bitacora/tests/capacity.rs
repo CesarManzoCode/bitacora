@@ -129,7 +129,10 @@ fn history_and_projection_use_the_contract_keys() {
     let json = p.to_json().unwrap();
     assert_eq!(
         json,
-        format!("{{\"projected_physical_bytes\":{}}}", p.projected_physical_bytes)
+        format!(
+            "{{\"projected_physical_bytes\":{}}}",
+            p.projected_physical_bytes
+        )
     );
     assert_eq!(Projection::from_json(&json).unwrap(), p);
 }

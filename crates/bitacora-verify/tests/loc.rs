@@ -14,7 +14,8 @@ fn rust_code_with_trailing_comment_counts() {
 
 #[test]
 fn rust_multiline_block_comment_does_not_count() {
-    let text = "/*\n * first\n * second\n */\nfn f() {}\n    /* one line */\n  /* starts\n  ends */\n";
+    let text =
+        "/*\n * first\n * second\n */\nfn f() {}\n    /* one line */\n  /* starts\n  ends */\n";
     assert_eq!(count_lines(text, Lang::Rust), 1);
 }
 
@@ -38,7 +39,8 @@ fn rust_block_delimiter_inside_code_is_not_a_comment() {
 
 #[test]
 fn shell_hash_lines_and_blank_lines_do_not_count() {
-    let text = "#!/usr/bin/env bash\n# comment\n    # indented comment\n\nset -eu\necho hi # trailing\n";
+    let text =
+        "#!/usr/bin/env bash\n# comment\n    # indented comment\n\nset -eu\necho hi # trailing\n";
     assert_eq!(count_lines(text, Lang::Hash), 2);
 }
 

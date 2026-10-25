@@ -74,8 +74,7 @@ pub struct Projection {
 
 impl Projection {
     pub fn from_json(text: &str) -> Result<Projection> {
-        serde_json::from_str(text)
-            .map_err(|e| Error::InvalidArgument(format!("projection: {e}")))
+        serde_json::from_str(text).map_err(|e| Error::InvalidArgument(format!("projection: {e}")))
     }
 
     pub fn to_json(&self) -> Result<String> {
@@ -139,8 +138,7 @@ impl History {
     /// evenly as possible, the first rounds taking the remainder.
     pub fn round_writes(&self, round: u64) -> u64 {
         let rounds = self.rounds_per_day();
-        self.write_blocks_per_day / rounds
-            + u64::from(round < self.write_blocks_per_day % rounds)
+        self.write_blocks_per_day / rounds + u64::from(round < self.write_blocks_per_day % rounds)
     }
 
     /// `(new, overwrites)` for `writes` blocks when `written` distinct

@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::fs;
-use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -80,7 +79,7 @@ impl Node {
 
 /// Status of a raw `STATUS` request and its payload as text.
 fn raw_status(socket: &Path) -> (Status, String) {
-    let mut stream = UnixStream::connect(socket).unwrap();
+    let mut stream = bitacora::socket::connect(socket).unwrap();
     wire::write_request(&mut stream, &Request::new(Op::Status, 1)).unwrap();
     let resp = wire::read_response(&mut stream).unwrap().unwrap();
     (resp.status, resp.text())

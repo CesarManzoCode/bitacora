@@ -50,7 +50,7 @@ sudo bash scripts/c20-ublk-recovery.sh
 Toda cifra de esta sección sale de un archivo de `results/` con la máquina, el comando, la fecha y el commit que la produjeron. Los dos archivos los escriben los corredores al correr `make criteria` (o `target/release/bitacora-verify c06` y `c21` por separado) y se versionan con el commit de cierre de cada fase.
 
 - [`results/c06.json`](results/c06.json): amplificación de escritura del GC y p99 por operación (C6).
-- [`results/c21.json`](results/c21.json): IOPS de lectura y de escritura, p50, p99 y p999, p99 durante el GC y si alguna cifra queda bajo la referencia pública de 3,000 IOPS (C21). Todavía no está en el repositorio: C21 no se ha corrido, así que no hay cifras de rendimiento que publicar.
+- [`results/c21.json`](results/c21.json): IOPS de lectura y de escritura, p50, p99 y p999, p99 durante el GC y si alguna cifra queda bajo la referencia pública de 3,000 IOPS (C21).
 
 C1–C10 pasaron en el commit `5e91d04`, y C11–C18 y C25 en `457fd5c`, sin omitidos. Las cifras de C4, C12, C13, C15 y C25 no tienen archivo en `results/`, así que no se publican aquí.
 
@@ -64,6 +64,20 @@ Fuente: [`results/c06.json`](results/c06.json). Máquina: AMD Ryzen 5 5600G, ker
 | `uniforme` | 2.9185 | 3.5 | 0.0735 |
 
 Con el disparo de GC anterior al ADR 0001, la misma medición dio 3.9964 y 4.8663 y C6 fallaba ([`results/c06-aa68e3d.json`](results/c06-aa68e3d.json)).
+
+### C21: IOPS y latencia
+
+Fuente: [`results/c21.json`](results/c21.json). Máquina: AMD Ryzen 5 5600G, kernel 7.2.11-arch1-1. Comando: `target/release/bitacora-verify c21`. Fecha: 2026-10-24T22:57:41Z. Commit: `88a5e82`. Volumen de 4 GiB sobre `FileMedium` con `O_DIRECT`, 8 hilos, fases de 30 s de lecturas y de escrituras aleatorias de 4 KiB, con `flush` cada 32 escrituras por hilo.
+
+| Cifra | Valor |
+| --- | --- |
+| IOPS de lectura | 28816.9875 |
+| IOPS de escritura | 11723.7302 |
+| p50 / p99 / p999 (ms, lectura y escritura juntas) | 0.2441 / 3.8341 / 23.9722 |
+| p99 durante el GC (ms) | 22.5526 |
+| Bajo la referencia de 3,000 IOPS | no |
+
+El disparo del GC se alcanzó antes de la fase con GC (`disparo_gc_alcanzado: true`). La referencia de 3,000 IOPS es la cifra pública de Railway: no es el mismo contrato ni la misma máquina.
 
 ## Omitidos
 

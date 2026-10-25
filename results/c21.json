@@ -1,0 +1,51 @@
+{
+  "criterio": "c21",
+  "iops_lectura": 28816.9875,
+  "iops_escritura": 11723.7302,
+  "p50_ms": 0.2441,
+  "p99_ms": 3.8341,
+  "p999_ms": 23.9722,
+  "p99_ms_durante_gc": 22.5526,
+  "bajo_referencia": false,
+  "referencia_iops": 3000.0000,
+  "disparo_gc_alcanzado": true,
+  "volumen_bytes": 4294967296,
+  "hilos": 8,
+  "segundos_por_fase": 30,
+  "flush_cada": 32,
+  "lectura": {
+    "iops": 28816.9875,
+    "p50_ms": 0.2695,
+    "p99_ms": 0.5092,
+    "p999_ms": 0.6452,
+    "operaciones": 864517,
+    "segundos": 30.0003,
+    "segmentos_liberados_por_gc": 0
+  },
+  "escritura": {
+    "iops": 11723.7302,
+    "p50_ms": 0.0014,
+    "p99_ms": 7.9523,
+    "p999_ms": 48.5830,
+    "operaciones": 351719,
+    "segundos": 30.0006,
+    "segmentos_liberados_por_gc": 216
+  },
+  "sobrescritura_con_gc": {
+    "iops": 7859.6369,
+    "p50_ms": 0.0015,
+    "p99_ms": 22.5526,
+    "p999_ms": 69.8439,
+    "operaciones": 235978,
+    "segundos": 30.0240,
+    "segmentos_liberados_por_gc": 393
+  },
+  "maquina": {
+    "cpu": "AMD Ryzen 5 5600G with Radeon Graphics",
+    "kernel": "7.2.11-arch1-1",
+    "disco": "ADATA SU630, DataTraveler 2.0"
+  },
+  "comando": "/home/cesarmanzocode/kiln/projects/bitacora/repo/target/release/bitacora-verify c21",
+  "fecha": "2026-10-24T22:57:41Z",
+  "commit": "88a5e829aec4a47ba233695ef5a0e4777cab6fe0"
+}

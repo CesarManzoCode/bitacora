@@ -20,7 +20,6 @@ use std::error::Error;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufWriter, Write};
 use std::ops::RangeInclusive;
-use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
@@ -125,7 +124,7 @@ type Res<T> = Result<T, Box<dyn Error>>;
 fn wait_ready(socket: &Path, child: &mut Child) -> Res<()> {
     let deadline = Instant::now() + READY_TIMEOUT;
     loop {
-        if UnixStream::connect(socket).is_ok() {
+        if bitacora::socket::connect(socket).is_ok() {
             return Ok(());
         }
         if let Some(status) = child.try_wait()? {
@@ -194,7 +193,7 @@ fn wait_acked(acked: &AtomicU64, count: u64, writer: &thread::JoinHandle<Result<
 
 /// Whether the server at `socket` answers a `STATUS` with `MOVED(dest)`.
 fn answers_moved(socket: &Path, dest: &Path) -> Res<bool> {
-    let mut stream = UnixStream::connect(socket)?;
+    let mut stream = bitacora::socket::connect(socket)?;
     wire::write_request(&mut stream, &Request::new(Op::Status, 1))?;
     let resp = wire::read_response(&mut stream)?.ok_or("source closed the connection")?;
     Ok(resp.status == Status::Moved && Path::new(&resp.text()) == dest)

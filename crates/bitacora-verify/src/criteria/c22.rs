@@ -123,8 +123,8 @@ pub fn run(ctx: &mut Ctx) -> Outcome {
     let max_error = threshold(&["c22_max_relative_error"])?;
     let history_path = ctx.dir.join("history.json");
     fs::write(&history_path, HISTORY.to_json()?)?;
-    let projected = project(&history_path, &ctx.dir.join("projection.json"))?
-        .projected_physical_bytes;
+    let projected =
+        project(&history_path, &ctx.dir.join("projection.json"))?.projected_physical_bytes;
     let real = apply(&ctx.dir.join("volume.img"), &HISTORY, DAYS, ctx.seed)?;
     let error = (projected as f64 - real as f64).abs() / real as f64;
     ctx.line(format!("proyectado_bytes: {projected}"));
