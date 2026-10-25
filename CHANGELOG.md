@@ -2,19 +2,24 @@
 
 ## [Sin publicar]
 
-### K3 — Frontend, rendimiento y operación (2026-10-24, pendiente de verificación de cierre)
+### K3 — Frontend, rendimiento y operación (2026-10-24)
 
 - Traducción de peticiones de bloque en `frontend.rs`, sin dependencia de libublk: sectores de 512 bytes a bloques de 4096, `FLUSH` a `flush`, `FUA` a `write_fua`. Rechaza peticiones no alineadas a 4096, fuera del volumen, `DISCARD` y `WRITE_ZEROES`.
 - `bitacora ublk --volume F [--create SIZE]` (feature `ublk`, `make ublk`): dispositivo con bloque lógico de 4096, caché volátil y FUA, una cola de profundidad 64 y `UBLK_F_USER_RECOVERY | UBLK_F_USER_RECOVERY_REISSUE`. Imprime el id, sirve hasta `SIGTERM` y entonces cierra el volumen y borra el dispositivo. `bitacora ublk --recover DEV_ID --volume F` retoma el dispositivo tras un `SIGKILL`. Sin la feature, el subcomando avisa que el binario se compiló sin ella.
-- `scripts/c19-ublk.sh` y `scripts/c20-ublk-recovery.sh`, llamados por `bitacora-verify all` como c19 y c20; salen con 77 (omitido) sin root, sin `/dev/ublk-control` o sin permiso. Aún no se han corrido en esta máquina.
+- `scripts/c19-ublk.sh` y `scripts/c20-ublk-recovery.sh`, llamados por `bitacora-verify all` como c19 y c20; salen con 77 (omitido) sin root, sin `/dev/ublk-control` o sin permiso. En esta máquina, sin root, salen omitidos.
 - `bitacora capacity --history H.json [--days N]` (`capacity.rs`): lee `{volume_size, segment_size, write_blocks_per_day, overwrite_fraction, snapshots_per_day, snapshot_retention_days}` e imprime `{"projected_physical_bytes": n}` para N días (30 por defecto). El modelo recorre la historia día por día con el empaquetado en lotes y segmentos del flujo caliente, la regla de espacio de la sección 4 y el disparo del GC del ADR 0001, y nunca pasa del tope de `max_segments` segmentos.
-- `bitacora-verify c21`: 4 GiB sobre `FileMedium` con `O_DIRECT`, llenado secuencial, 8 hilos, fases de 30 s de lectura y de escritura aleatoria de 4 KiB (`flush` cada 32 escrituras por hilo) y una fase de sobrescritura con el GC activo. Escribe `results/c21.json` y borra el volumen al terminar. Un resultado bajo 3,000 IOPS se informa en `bajo_referencia`, no falla. Medido en `results/c21.json` sobre `88a5e82`: 28816.9875 IOPS de lectura, 11723.7302 de escritura y p99 de 22.5526 ms durante el GC.
-- `bitacora-verify c22`: historial fijo de 30 días sobre 256 MiB (5,000 bloques al día, 70 % de sobrescrituras, un snapshot al día retenido 2 días). Proyecta con el binario `bitacora capacity` antes de aplicar la carga y compara con `st_blocks × 512` de `volume.img`. Aún no se ha corrido.
+- `bitacora-verify c21`: 4 GiB sobre `FileMedium` con `O_DIRECT`, llenado secuencial, 8 hilos, fases de 30 s de lectura y de escritura aleatoria de 4 KiB (`flush` cada 32 escrituras por hilo) y una fase de sobrescritura con el GC activo. Escribe `results/c21.json` y borra el volumen al terminar. Un resultado bajo 3,000 IOPS se informa en `bajo_referencia`, no falla. Medido en `results/c21.json` sobre `187d5ba`: 28500.6826 IOPS de lectura, 11348.1566 de escritura y p99 de 22.0662 ms durante el GC, sobre la referencia de 3,000 IOPS.
+- `bitacora-verify c22`: historial fijo de 30 días sobre 256 MiB (5,000 bloques al día, 70 % de sobrescrituras, un snapshot al día retenido 2 días). Proyecta con el binario `bitacora capacity` antes de aplicar la carga y compara con `st_blocks × 512` de `volume.img`.
 - Documento de requisitos de ingeniería (`docs/engineering-requirements.md`): requisitos, garantías prometidas y no prometidas, modos de falla, plan de capacidad de disco y memoria, y qué cambia con volúmenes 100 veces más grandes (checkpoints del índice, ubicación en el índice en vez de tabla hash, índice paginado en disco, GC con colchón).
 - `bitacora-verify c24` comprueba los seis encabezados del documento de requisitos; `bitacora-verify c26` cuenta las líneas del motor y de la verificación con la regla de la sección 13 del contrato y falla si el motor no es mayor o si contiene `#[cfg(test)]`.
 - `bitacora-verify all` corre c01–c22, c24, c25 y c26, y `target/criteria/report.txt` termina con la lista de criterios omitidos y su razón (vacía si no hay).
 - `socket.rs`: el servidor, el cliente, la replicación, la migración y los corredores abren los sockets Unix con `socket::bind` y `socket::connect`. Una ruta que no cabe en `sun_path` (108 bytes) se abre como `/proc/self/fd/<fd>/<nombre>` sobre el directorio padre. Antes, en el clon que C23 crea bajo `target/`, la ruta del socket destino de c14 mide 119 bytes: el servidor destino no arrancaba y `make criteria` salía con 2.
 - `README.md` documenta el comando único para un clon limpio (`make criteria`), cómo correr C19 y C20 con root (`make ublk` y los scripts), los archivos de `results/` y las condiciones de omisión.
+- Criterios C21–C24 y C26 aprobados en el commit `187d5ba`. C19 y C20 quedaron omitidos (77, sin root) y no cuentan como aprobados. C1–C18 y C25 siguen aprobados en ese commit. C6 medido de nuevo en `results/c06.json` sobre `187d5ba`: 2.4526 en `caliente_fria` y 2.9135 en `uniforme`.
+
+**Rutas de socket más largas que `sun_path`.**
+Decisión: el servidor, el cliente, la replicación y la migración abren los sockets Unix con `socket.rs`. Una ruta de más de 107 bytes se abre como `/proc/self/fd/<fd>/<nombre>` sobre el directorio padre.
+Razón: en el clon limpio de C23, la ruta del socket destino de c14 medía 119 bytes, y `make criteria` salía con 2. Así el motor sirve sockets bajo directorios profundos sin acortar las rutas de los corredores. El requisito de `/proc` queda en `LIMITATIONS.md`.
 
 ### K2 — Servicios de datos (2026-10-24)
 

@@ -11,7 +11,7 @@ Es la versión ejecutable y abierta de la tarea de entrevista «Design a Storage
 | K0 | Fundación: contrato, investigación, plan | — | lista |
 | K1 | Volumen durable: log, índice, recuperación, checksums, GC, disco simulado | C1–C10 | Cerrada |
 | K2 | Snapshots, backups, servidor, migración en vivo, réplica, estado | C11–C18, C25 | Cerrada |
-| K3 | ublk, rendimiento, capacidad, documento de requisitos, clon limpio | C19–C24, C26 | Implementada; falta la verificación de cierre |
+| K3 | ublk, rendimiento, capacidad, documento de requisitos, clon limpio | C19–C24, C26 | Cerrada |
 
 ## Comandos
 
@@ -52,29 +52,29 @@ Toda cifra de esta sección sale de un archivo de `results/` con la máquina, el
 - [`results/c06.json`](results/c06.json): amplificación de escritura del GC y p99 por operación (C6).
 - [`results/c21.json`](results/c21.json): IOPS de lectura y de escritura, p50, p99 y p999, p99 durante el GC y si alguna cifra queda bajo la referencia pública de 3,000 IOPS (C21).
 
-C1–C10 pasaron en el commit `5e91d04`, y C11–C18 y C25 en `457fd5c`, sin omitidos. Las cifras de C4, C12, C13, C15 y C25 no tienen archivo en `results/`, así que no se publican aquí.
+En la verificación de cierre de K3, sobre el commit `187d5ba`, pasaron C1–C18 y C21–C26. C19 y C20 quedaron omitidos (código 77, sin root; ver [Omitidos](#omitidos)) y no cuentan como aprobados. Las cifras de C4, C12, C13, C15, C22, C23, C25 y C26 no tienen archivo en `results/`, así que no se publican aquí.
 
 ### C6: amplificación de escritura del GC
 
-Fuente: [`results/c06.json`](results/c06.json). Máquina: AMD Ryzen 5 5600G, kernel 7.2.11-arch1-1. Comando: `target/release/bitacora-verify c06`. Fecha: 2026-10-24T22:15:52Z. Commit: `457fd5c` con cambios sin commit (`-dirty` en el archivo). Volumen de 1 GiB lleno, luego 3 × volumen de escrituras aleatorias de 4 KiB con `flush` cada 256.
+Fuente: [`results/c06.json`](results/c06.json). Máquina: AMD Ryzen 5 5600G, kernel 7.2.11-arch1-1. Comando: `target/release/bitacora-verify c06`. Fecha: 2026-10-25T00:43:00Z. Commit: `187d5ba` con cambios sin commit (`-dirty` en el archivo). Volumen de 1 GiB lleno, luego 3 × volumen de escrituras aleatorias de 4 KiB con `flush` cada 256.
 
 | Carga | Amplificación de escritura | Umbral | p99 por operación (ms) |
 | --- | --- | --- | --- |
-| `caliente_fria` (20 % de los bloques recibe 80 %) | 2.4544 | 2.5 | 0.0492 |
-| `uniforme` | 2.9185 | 3.5 | 0.0735 |
+| `caliente_fria` (20 % de los bloques recibe 80 %) | 2.4526 | 2.5 | 0.0536 |
+| `uniforme` | 2.9135 | 3.5 | 0.0685 |
 
 Con el disparo de GC anterior al ADR 0001, la misma medición dio 3.9964 y 4.8663 y C6 fallaba ([`results/c06-aa68e3d.json`](results/c06-aa68e3d.json)).
 
 ### C21: IOPS y latencia
 
-Fuente: [`results/c21.json`](results/c21.json). Máquina: AMD Ryzen 5 5600G, kernel 7.2.11-arch1-1. Comando: `target/release/bitacora-verify c21`. Fecha: 2026-10-24T22:57:41Z. Commit: `88a5e82`. Volumen de 4 GiB sobre `FileMedium` con `O_DIRECT`, 8 hilos, fases de 30 s de lecturas y de escrituras aleatorias de 4 KiB, con `flush` cada 32 escrituras por hilo.
+Fuente: [`results/c21.json`](results/c21.json). Máquina: AMD Ryzen 5 5600G, kernel 7.2.11-arch1-1. Comando: `target/release/bitacora-verify c21`. Fecha: 2026-10-25T00:11:42Z. Commit: `187d5ba`. Volumen de 4 GiB sobre `FileMedium` con `O_DIRECT`, 8 hilos, fases de 30 s de lecturas y de escrituras aleatorias de 4 KiB, con `flush` cada 32 escrituras por hilo.
 
 | Cifra | Valor |
 | --- | --- |
-| IOPS de lectura | 28816.9875 |
-| IOPS de escritura | 11723.7302 |
-| p50 / p99 / p999 (ms, lectura y escritura juntas) | 0.2441 / 3.8341 / 23.9722 |
-| p99 durante el GC (ms) | 22.5526 |
+| IOPS de lectura | 28500.6826 |
+| IOPS de escritura | 11348.1566 |
+| p50 / p99 / p999 (ms, lectura y escritura juntas) | 0.2462 / 4.0490 / 23.1608 |
+| p99 durante el GC (ms) | 22.0662 |
 | Bajo la referencia de 3,000 IOPS | no |
 
 El disparo del GC se alcanzó antes de la fase con GC (`disparo_gc_alcanzado: true`). La referencia de 3,000 IOPS es la cifra pública de Railway: no es el mismo contrato ni la misma máquina.
