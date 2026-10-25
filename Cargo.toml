@@ -1,0 +1,9 @@
+[workspace]
+resolver = "3"
+members = ["crates/bitacora", "crates/bitacora-verify"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98.1"
+license = "MIT"
